@@ -70,16 +70,17 @@ h1{font-size:22px;margin:0 0 4px}
 /* tables */
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
 .table-wrap.tall{max-height:calc(100vh - 240px)}
-table.grid{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+table.grid{border-collapse:collapse;width:max-content;min-width:100%;font-size:12.5px;white-space:nowrap}
 table.grid th,table.grid td{padding:6px 8px;border-bottom:1px solid #eef1f5;text-align:right}
 table.grid thead th{position:sticky;top:0;background:var(--navy);color:#fff;z-index:2;font-weight:600;text-align:right}
 table.grid thead th.in{background:var(--navy-2)}
 table.grid thead th:nth-child(1),table.grid thead th:nth-child(2),table.grid thead th:nth-child(3){text-align:left}
 table.grid td:first-child,table.grid td.txt{text-align:left}
 table.grid tbody tr:hover{background:var(--ice)}
-table.grid input,table.grid select{width:100%;min-width:62px;border:1px solid var(--yellow-line);background:var(--yellow);border-radius:6px;padding:5px 6px;text-align:right;font-size:12.5px;font-family:inherit}
-table.grid select{text-align:left;min-width:84px}
-table.grid td.calc{color:#33414f}
+table.grid input,table.grid select{width:74px;border:1px solid var(--yellow-line);background:var(--yellow);border-radius:6px;padding:5px 6px;text-align:right;font-size:12.5px;font-family:inherit}
+table.grid input.txt{width:150px;text-align:left}
+table.grid select{width:100px;text-align:left}
+table.grid td.calc{color:#33414f;padding-left:12px}
 table.grid tfoot th{background:#eef2f7;position:sticky;bottom:0}
 .cell-dec{font-weight:800}
 .dec-GO{color:var(--go)}.dec-REVIEW{color:var(--review)}.dec-NO-GO{color:var(--nogo)}
