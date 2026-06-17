@@ -351,27 +351,61 @@ html[data-theme="dark"] .report-card .rc-ico{color:#93B4FF}
 .ctx-foot{border-top:1px solid var(--border);padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap}
 
 /* tender workspace ------------------------------------------------------- */
-.tw-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.tw-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
 .tw-title{flex:1;min-width:0}
-.tw-title .ref{font-size:11.5px;color:var(--text-3);font-weight:600}
-.tw-title h1{margin:2px 0 0}
+.tw-title .ref{font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.tw-title h1{margin:3px 0 0}
 .tw-head-actions{display:flex;gap:8px;align-items:center}
-.tw-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:16px 0 18px;overflow-x:auto}
-.tw-tabs button{border:0;background:transparent;color:var(--text-2);padding:10px 14px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit}
+.tw-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:18px 0 20px;overflow-x:auto}
+.tw-tabs button{border:0;background:transparent;color:var(--text-2);padding:10px 14px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;margin-bottom:-1px}
 .tw-tabs button:hover{color:var(--text)}
-.tw-tabs button.on{color:var(--primary);border-bottom-color:var(--primary)}
+.tw-tabs button.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
 html[data-theme="dark"] .tw-tabs button.on{color:#93B4FF;border-bottom-color:#93B4FF}
-.tw-section{display:grid;grid-template-columns:1fr;gap:16px;max-width:1200px}
-.form-card{background:var(--raised);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px}
-.form-card h3{margin:0 0 14px;font-size:13px;font-weight:600}
-.tw-toolbar{display:flex;gap:8px;margin-bottom:12px}
-.tw-map{height:300px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);position:relative}
+
+/* panes & cards */
+.tw-pane{max-width:1180px}
+.tw-pane-narrow{max-width:760px}
+.card-sub{font-size:12px;color:var(--text-2);margin:-8px 0 14px}
+.card .card-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:18px;flex-wrap:wrap}
+.card .card-foot .cf{font-size:12px;color:var(--text-2)}
+.card .card-foot .cf b{display:block;font-size:15px;color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+
+/* form fields */
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+.f-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.f-field.span2{grid-column:1/-1}
+.f-label{font-size:11px;font-weight:600;letter-spacing:.3px;color:var(--text-2);text-transform:uppercase}
+.f-field input,.f-field textarea,.f-field select{width:100%;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);border-radius:var(--r-sm);font-family:inherit;font-size:13px}
+.f-field input,.f-field select{height:36px;padding:0 11px}
+.f-field textarea{padding:9px 11px;resize:vertical;min-height:54px;line-height:1.5}
+.f-field input:focus,.f-field textarea:focus,.f-field select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.f-hint{font-size:11.5px;color:var(--text-3)}
+
+/* overview: details + map */
+.ov-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start}
+.map-card{display:flex;flex-direction:column}
+.tw-toolbar{display:flex;gap:8px;margin-bottom:14px;align-items:center}
+.tw-toolbar .tw-count{margin-left:auto;font-size:12px;color:var(--text-3)}
+.tw-map{flex:1;min-height:340px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);position:relative}
 .tw-map .map-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12.5px;text-align:center;padding:16px}
+.map-note{font-size:11.5px;color:var(--text-3);margin-top:10px}
 #tenderLanes{min-width:1850px}
-.vol-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:8px;align-items:end;height:150px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px}
+
+/* volume */
+.vol-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+.vol-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:8px;align-items:end;height:190px;padding:6px 0 0}
 .vol-col{display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
-.vol-bar{width:62%;background:var(--primary);border-radius:3px 3px 0 0;min-height:2px}
+.vol-bar{width:64%;background:var(--primary);border-radius:3px 3px 0 0;min-height:2px;transition:height .12s}
+.vol-col:hover .vol-bar{background:var(--primary-hover)}
 .vol-m{font-size:11px;color:var(--text-3)}
+#volTable{min-width:100%}
+
+/* bids */
+.bid-head{display:grid;grid-template-columns:1fr 110px 130px 64px;gap:8px;padding:0 2px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--text-3)}
+.bid-head span:nth-child(2),.bid-head span:nth-child(3){text-align:left}
+.bidrow{grid-template-columns:1fr 110px 130px 28px 28px!important}
+
+@media(max-width:1080px){.ov-grid,.vol-layout{grid-template-columns:1fr}}
 
 /* modal (Excel import) --------------------------------------------------- */
 .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:flex;justify-content:center;align-items:flex-start;padding-top:8vh}

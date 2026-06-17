@@ -345,27 +345,34 @@
   }
 
   // section HTML builders ----------------------------------------------------
-  function field(label, attr, value, type, full) {
-    return '<label class="' + (full ? "full" : "") + '">' + label +
-      '<input ' + attr + ' type="' + (type || "text") + '" value="' + esc(value) + '"></label>';
+  // f(label, attr, value, opts) — opts: {type, area, rows, span, hint, ph}
+  function f(label, attr, value, opts) {
+    opts = opts || {};
+    var ctrl = opts.area
+      ? '<textarea ' + attr + ' rows="' + (opts.rows || 3) + '"' + (opts.ph ? ' placeholder="' + opts.ph + '"' : "") + ">" + esc(value) + "</textarea>"
+      : '<input ' + attr + ' type="' + (opts.type || "text") + '" value="' + esc(value) + '"' + (opts.ph ? ' placeholder="' + opts.ph + '"' : "") + ">";
+    return '<label class="f-field' + (opts.span === 2 ? " span2" : "") + '"><span class="f-label">' + label + "</span>" +
+      ctrl + (opts.hint ? '<span class="f-hint">' + opts.hint + "</span>" : "") + "</label>";
   }
-  function area(label, attr, value) {
-    return '<label class="full">' + label + '<textarea ' + attr + ' rows="2">' + esc(value) + "</textarea></label>";
+  function card(title, sub, body, cls) {
+    return '<div class="card' + (cls ? " " + cls : "") + '"><div class="card-h">' + title + "</div>" +
+      (sub ? '<div class="card-sub">' + sub + "</div>" : "") + body + "</div>";
   }
   function overviewHtml(t) {
-    return '<div class="tw-section">' +
-      '<div class="form-card"><h3>Overview</h3><div class="fgrid">' +
-        field("Reference", 'data-tf="reference"', t.reference) +
-        field("Customer", 'data-tf="customer"', t.customer) +
-        field("Title", 'data-tf="title"', t.title, "text", true) +
-        field("Deadline", 'data-tf="dueDate"', t.dueDate, "date") +
-        field("Submitted", 'data-tf="submittedDate"', t.submittedDate, "date") +
-        field("Owner", 'data-tf="owner"', t.owner) +
-        field("Win probability %", 'data-tf="probability"', t.probability, "number") +
-        area("Notes", 'data-tf="notes"', t.notes) +
-      "</div></div>" +
-      '<div class="form-card"><h3>Lane network</h3><div id="tenderMap" class="tw-map"><div class="map-fallback">Loading map…</div></div></div>' +
-      "</div>";
+    var details = card("Tender details", "Core RFQ identifiers and ownership.",
+      '<div class="field-grid">' +
+        f("Reference / RFQ #", 'data-tf="reference"', t.reference, { ph: "RFQ-2026-014" }) +
+        f("Customer", 'data-tf="customer"', t.customer, { ph: "Customer name" }) +
+        f("Title", 'data-tf="title"', t.title, { span: 2, ph: "Short description of the tender" }) +
+        f("Owner", 'data-tf="owner"', t.owner) +
+        f("Deadline", 'data-tf="dueDate"', t.dueDate, { type: "date" }) +
+        f("Submitted", 'data-tf="submittedDate"', t.submittedDate, { type: "date" }) +
+        f("Win probability %", 'data-tf="probability"', t.probability, { type: "number" }) +
+        f("Notes", 'data-tf="notes"', t.notes, { area: true, span: 2, rows: 3, ph: "Internal notes, assumptions, exclusions…" }) +
+      "</div>");
+    var note = t.lanes.length ? (t.lanes.length + " lane" + (t.lanes.length === 1 ? "" : "s") + " · collection (blue) → delivery (green). Map pins need an internet connection.") : "Add operational lanes to plot the network.";
+    var mapCard = card("Lane network", "", '<div id="tenderMap" class="tw-map"><div class="map-fallback">Loading map…</div></div><div class="map-note">' + note + "</div>", "map-card");
+    return '<div class="tw-pane"><div class="ov-grid">' + details + mapCard + "</div></div>";
   }
   var LANE_COLS_HTML =
     '<colgroup><col style="width:80px"><col style="width:130px"><col style="width:80px"><col style="width:130px">' +
@@ -394,8 +401,10 @@
   }
   function lanesHtml(t, s) {
     var rows = (t.lanes || []).map(function (l) { return opLaneRowHtml(l, s); }).join("");
-    return '<div class="tw-toolbar"><button class="btn" data-addlane>+ Add lane</button>' +
-      '<button class="btn" data-import><svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg> Import from Excel</button></div>' +
+    var n = (t.lanes || []).length;
+    return '<div class="tw-toolbar"><button class="btn btn-primary" data-addlane>+ Add lane</button>' +
+      '<button class="btn" data-import><svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg> Import from Excel</button>' +
+      '<span class="tw-count">' + n + " lane" + (n === 1 ? "" : "s") + " · priced by the cost engine</span></div>" +
       '<div class="grid-wrap"><table class="pgrid" id="tenderLanes">' + LANE_COLS_HTML + "<tbody>" +
       (rows || '<tr><td colspan="19" class="empty">No lanes yet. Add one or import from Excel.</td></tr>') +
       "</tbody></table></div>";
@@ -408,51 +417,69 @@
     c[3].textContent = r.decision || "—"; c[3].className = "calc cell-dec dec-" + (r.decision || "");
     c[4].textContent = fmtMoney(r.annualRev); tr.className = "row-" + (r.decision || "none");
   }
+  function volStats(t) {
+    var ship = t.volumeHistory.map(function (v) { return E.num(v.shipments); });
+    var totS = ship.reduce(function (a, x) { return a + x; }, 0);
+    var totP = t.volumeHistory.reduce(function (a, v) { return a + E.num(v.pallets); }, 0);
+    return { totS: totS, totP: totP, avg: totS / 12, peak: Math.max.apply(null, ship.concat(0)) };
+  }
   function volBarsHtml(t) {
     var max = Math.max(1, Math.max.apply(null, t.volumeHistory.map(function (v) { return E.num(v.shipments); })));
     return t.volumeHistory.map(function (v) {
-      var h = E.num(v.shipments) / max * 130;
-      return '<div class="vol-col"><div class="vol-bar" style="height:' + Math.max(2, h).toFixed(0) + 'px" title="' + E.num(v.shipments) + ' shipments"></div><div class="vol-m">' + v.month + "</div></div>";
+      var h = E.num(v.shipments) / max * 170;
+      return '<div class="vol-col"><div class="vol-bar" style="height:' + Math.max(2, h).toFixed(0) + 'px" title="' + v.month + ": " + E.num(v.shipments) + ' shipments"></div><div class="vol-m">' + v.month + "</div></div>";
     }).join("");
   }
+  function volTotalsHtml(t) {
+    var s = volStats(t);
+    return '<div class="card-foot"><span class="cf">Total shipments<b id="volTotS">' + fmtNum(s.totS) + '</b></span>' +
+      '<span class="cf">Total pallets<b id="volTotP">' + fmtNum(s.totP) + '</b></span>' +
+      '<span class="cf">Monthly avg<b id="volAvg">' + fmtNum(Math.round(s.avg)) + '</b></span>' +
+      '<span class="cf">Peak month<b id="volPeak">' + fmtNum(s.peak) + "</b></span></div>";
+  }
   function volumeHtml(t) {
-    var totS = t.volumeHistory.reduce(function (a, v) { return a + E.num(v.shipments); }, 0);
-    var totP = t.volumeHistory.reduce(function (a, v) { return a + E.num(v.pallets); }, 0);
     var rows = t.volumeHistory.map(function (v, i) {
-      return "<tr><td class=\"txt\" style=\"padding:0 10px\">" + v.month + "</td>" +
+      return '<tr><td class="txt" style="padding:0 12px">' + v.month + "</td>" +
         '<td><input data-vol="' + i + '" data-vf="shipments" value="' + esc(v.shipments) + '" inputmode="decimal"></td>' +
         '<td><input data-vol="' + i + '" data-vf="pallets" value="' + esc(v.pallets) + '" inputmode="decimal"></td></tr>';
     }).join("");
-    return '<div class="tw-section"><div class="form-card"><h3>Monthly shipment history (12-month seasonality)</h3>' +
-      '<div class="vol-grid" id="volBars">' + volBarsHtml(t) + "</div>" +
-      '<div class="grid-wrap"><table class="pgrid" id="volTable" style="min-width:100%"><colgroup><col style="width:120px"><col><col></colgroup>' +
-      '<thead><tr><th class="l">Month</th><th>Shipments</th><th>Pallets</th></tr></thead><tbody>' + rows + "</tbody>" +
-      '<tfoot><tr><th class="l">Total</th><th id="volTotS">' + fmtNum(totS) + '</th><th id="volTotP">' + fmtNum(totP) + "</th></tr></tfoot></table></div></div>";
+    var bars = card("Monthly shipments", "12-month seasonality — taller bars are busier months.",
+      '<div class="vol-grid" id="volBars">' + volBarsHtml(t) + "</div>" + volTotalsHtml(t));
+    var table = card("Volumes by month", "",
+      '<div class="grid-wrap"><table class="pgrid" id="volTable"><colgroup><col style="width:120px"><col><col></colgroup>' +
+      '<thead><tr><th class="l">Month</th><th>Shipments</th><th>Pallets</th></tr></thead><tbody>' + rows + "</tbody></table></div>");
+    return '<div class="tw-pane"><div class="vol-layout">' + bars + table + "</div></div>";
   }
   function renderVolBars(t) {
     if (el("volBars")) el("volBars").innerHTML = volBarsHtml(t);
-    if (el("volTotS")) el("volTotS").textContent = fmtNum(t.volumeHistory.reduce(function (a, v) { return a + E.num(v.shipments); }, 0));
-    if (el("volTotP")) el("volTotP").textContent = fmtNum(t.volumeHistory.reduce(function (a, v) { return a + E.num(v.pallets); }, 0));
+    var s = volStats(t);
+    if (el("volTotS")) el("volTotS").textContent = fmtNum(s.totS);
+    if (el("volTotP")) el("volTotP").textContent = fmtNum(s.totP);
+    if (el("volAvg")) el("volAvg").textContent = fmtNum(Math.round(s.avg));
+    if (el("volPeak")) el("volPeak").textContent = fmtNum(s.peak);
   }
-  function sectionForm(title, sec, fields) {
-    return '<div class="tw-section"><div class="form-card"><h3>' + title + '</h3><div class="fgrid">' +
-      fields.map(function (f) { return area(f[0], 'data-ts="' + sec + "." + f[1] + '"', f[2]); }).join("") +
-      "</div></div></div>";
+  // sectionForm(title, sub, sec, fields) — fields: [label, key, value, opts]
+  function sectionForm(title, sub, sec, fields) {
+    var body = '<div class="field-grid">' +
+      fields.map(function (fd) { return f(fd[0], 'data-ts="' + sec + "." + fd[1] + '"', fd[2], fd[3] || {}); }).join("") + "</div>";
+    return '<div class="tw-pane">' + card(title, sub, body) + "</div>";
   }
   function bidRowHtml(b) {
     var opts = Seed.BID_STATUSES.map(function (s) { return '<option' + (s === b.status ? " selected" : "") + ">" + s + "</option>"; }).join("");
     return '<div class="bidrow" data-bid="' + b.id + '">' +
-      '<input class="bcar" data-bf="carrier" placeholder="Carrier" value="' + esc(b.carrier) + '">' +
-      '<input class="bamt" data-bf="amount" type="number" placeholder="$" value="' + esc(b.amount) + '">' +
+      '<input class="bcar" data-bf="carrier" placeholder="Carrier name" value="' + esc(b.carrier) + '">' +
+      '<input class="bamt" data-bf="amount" type="number" placeholder="Amount $" value="' + esc(b.amount) + '">' +
       '<select data-bf="status">' + opts + "</select>" +
-      '<button class="btn btn-sm" data-bidaward="1" title="Award this bid">✓</button>' +
+      '<button class="btn btn-sm" data-bidaward="1" title="Award this bid — marks tender Won">✓</button>' +
       '<button class="btn btn-sm" data-bidremove="1" title="Remove">✕</button></div>';
   }
   function bidsHtml(t) {
     var bids = (t.bids || []).map(bidRowHtml).join("");
-    return '<div class="tw-section"><div class="form-card"><h3>Competing carrier bids</h3><div class="bidlist">' +
-      (bids || '<div style="color:var(--text-3);font-size:12px">No bids recorded.</div>') +
-      '</div><button class="btn btn-sm" data-addbid style="margin-top:10px">+ Add bid</button></div></div>';
+    var head = (t.bids && t.bids.length) ? '<div class="bid-head"><span>Carrier</span><span>Bid amount</span><span>Status</span><span></span></div>' : "";
+    return '<div class="tw-pane tw-pane-narrow">' + card("Competing carrier bids",
+      "Record rival carrier quotes. Awarding a bid marks the tender Won.",
+      head + '<div class="bidlist">' + (bids || '<div style="color:var(--text-3);font-size:12.5px">No bids recorded yet.</div>') +
+      '</div><button class="btn btn-sm" data-addbid style="margin-top:12px">+ Add bid</button>') + "</div>";
   }
   function renderSection() {
     var t = getTender(currentTenderId); if (!t) { gotoView("active-tenders"); return; }
@@ -460,10 +487,26 @@
     if (sec === "overview") { body.innerHTML = overviewHtml(t); renderTenderMap(t); }
     else if (sec === "lanes") body.innerHTML = lanesHtml(t, state.settings);
     else if (sec === "volume") body.innerHTML = volumeHtml(t);
-    else if (sec === "schedule") body.innerHTML = sectionForm("Scheduling", "schedule", [["Collection windows", "collectionWindows", t.schedule.collectionWindows], ["Delivery timeframes", "deliveryTimeframes", t.schedule.deliveryTimeframes], ["Weekend / out-of-hours requirements", "weekend", t.schedule.weekend], ["Booking rules", "bookingRules", t.schedule.bookingRules]]);
-    else if (sec === "commercial") body.innerHTML = sectionForm("Commercial terms", "commercial", [["Fuel surcharge method", "fuelSurcharge", t.commercial.fuelSurcharge], ["Payment terms", "paymentTerms", t.commercial.paymentTerms], ["Claims process", "claims", t.commercial.claims], ["Minimum insurance levels", "minInsurance", t.commercial.minInsurance], ["Service credits / penalties", "serviceCredits", t.commercial.serviceCredits]]);
-    else if (sec === "technology") body.innerHTML = sectionForm("Technology requirements", "technology", [["Tracking / visibility tools", "tracking", t.technology.tracking], ["EDI / API integration", "ediApi", t.technology.ediApi], ["Proof-of-delivery (POD) spec", "pod", t.technology.pod]]);
-    else if (sec === "contract") body.innerHTML = sectionForm("Contract expectations", "contract", [["Duration", "duration", t.contract.duration], ["Start date", "startDate", t.contract.startDate], ["Accessorial charges (waiting, tail-lift…)", "accessorials", t.contract.accessorials], ["Dispute rules", "disputeRules", t.contract.disputeRules]]);
+    else if (sec === "schedule") body.innerHTML = sectionForm("Scheduling", "Collection and delivery requirements.", "schedule", [
+      ["Collection windows", "collectionWindows", t.schedule.collectionWindows, { ph: "e.g. Mon–Fri 06:00–14:00" }],
+      ["Delivery timeframes", "deliveryTimeframes", t.schedule.deliveryTimeframes, { ph: "e.g. Next day by 12:00" }],
+      ["Weekend / out-of-hours", "weekend", t.schedule.weekend, { ph: "e.g. Saturday AM on request" }],
+      ["Booking rules", "bookingRules", t.schedule.bookingRules, { area: true, span: 2, ph: "Lead times, slot booking, portals…" }]]);
+    else if (sec === "commercial") body.innerHTML = sectionForm("Commercial terms", "Pricing, payment and risk terms.", "commercial", [
+      ["Fuel surcharge method", "fuelSurcharge", t.commercial.fuelSurcharge, { ph: "e.g. Monthly, indexed to diesel" }],
+      ["Payment terms", "paymentTerms", t.commercial.paymentTerms, { ph: "e.g. 30 days EOM" }],
+      ["Minimum insurance", "minInsurance", t.commercial.minInsurance, { ph: "e.g. $5M public liability" }],
+      ["Service credits / penalties", "serviceCredits", t.commercial.serviceCredits, { ph: "e.g. 2% per late %" }],
+      ["Claims process", "claims", t.commercial.claims, { area: true, span: 2, ph: "Notification windows, liability caps…" }]]);
+    else if (sec === "technology") body.innerHTML = sectionForm("Technology requirements", "Visibility and integration expectations.", "technology", [
+      ["Tracking / visibility", "tracking", t.technology.tracking, { ph: "e.g. Live GPS, milestone events" }],
+      ["EDI / API integration", "ediApi", t.technology.ediApi, { ph: "e.g. EDI 214, REST API" }],
+      ["Proof-of-delivery (POD)", "pod", t.technology.pod, { area: true, span: 2, ph: "Digital POD, signature/photo, SLA…" }]]);
+    else if (sec === "contract") body.innerHTML = sectionForm("Contract expectations", "Term, accessorials and governance.", "contract", [
+      ["Duration", "duration", t.contract.duration, { ph: "e.g. 12 months" }],
+      ["Start date", "startDate", t.contract.startDate, { type: "date" }],
+      ["Accessorial charges", "accessorials", t.contract.accessorials, { area: true, span: 2, ph: "Waiting time, tail-lift, futile delivery, redelivery…" }],
+      ["Dispute rules", "disputeRules", t.contract.disputeRules, { area: true, span: 2, ph: "Escalation, governing law, mediation…" }]]);
     else if (sec === "bids") body.innerHTML = bidsHtml(t);
   }
   function bindTenderWorkspace() {
