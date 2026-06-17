@@ -16,9 +16,9 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-NAVY = colors.HexColor("#13294b")
-ICE = colors.HexColor("#e8f1fb")
-LINE = colors.HexColor("#d8e0ea")
+NAVY = colors.HexColor("#26395b")
+ICE = colors.HexColor("#eaf4fa")
+LINE = colors.HexColor("#d8e2ec")
 MUTED = colors.HexColor("#6b7686")
 
 
@@ -121,7 +121,7 @@ def generate_quote_pdf(payload: dict, out_path: str) -> None:
     sub = Table([[Paragraph("Brisbane, Queensland &middot; CoR-compliant cold-chain carrier",
                             ParagraphStyle("sb", fontSize=8.5, textColor=colors.white))]],
                 colWidths=[180 * mm])
-    sub.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1c3a66")),
+    sub.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#34507a")),
                              ("LEFTPADDING", (0, 0), (-1, -1), 10), ("TOPPADDING", (0, 0), (-1, -1), 3),
                              ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
     story.append(sub)

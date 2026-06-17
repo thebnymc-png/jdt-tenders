@@ -605,9 +605,9 @@
         var all = [];
         for (var i = 0; i < lanes.length; i++) {
           var a = pts[i * 2], b = pts[i * 2 + 1];
-          if (a) { L.circleMarker(a, { radius: 5, color: "#2563EB", fillOpacity: .9 }).addTo(map); all.push(a); }
+          if (a) { L.circleMarker(a, { radius: 5, color: "#1BA3DD", fillOpacity: .9 }).addTo(map); all.push(a); }
           if (b) { L.circleMarker(b, { radius: 5, color: "#059669", fillOpacity: .9 }).addTo(map); all.push(b); }
-          if (a && b) L.polyline([a, b], { color: "#2563EB", weight: 2, opacity: .55 }).addTo(map);
+          if (a && b) L.polyline([a, b], { color: "#1BA3DD", weight: 2, opacity: .55 }).addTo(map);
         }
         if (all.length) map.fitBounds(all, { padding: [30, 30], maxZoom: 11 });
         else holder.innerHTML = '<div class="map-fallback">Couldn\'t locate those places.</div>';

@@ -19,17 +19,17 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from .pdf_quote import safe_filename
 
-NAVY = "13294B"
-NAVY2 = "1C3A66"
-ICE = "E8F1FB"
-_NAVY = colors.HexColor("#13294b")
-_ICE = colors.HexColor("#e8f1fb")
-_LINE = colors.HexColor("#d8e0ea")
+NAVY = "26395B"
+NAVY2 = "34507A"
+ICE = "EAF4FA"
+_NAVY = colors.HexColor("#26395b")
+_ICE = colors.HexColor("#eaf4fa")
+_LINE = colors.HexColor("#d8e2ec")
 _MUTED = colors.HexColor("#6b7686")
 
 _HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
 _HDR_FILL = PatternFill("solid", fgColor=NAVY)
-_TITLE_FONT = Font(color="13294B", bold=True, size=14)
+_TITLE_FONT = Font(color="26395B", bold=True, size=14)
 _BOLD = Font(bold=True)
 _THIN = Side(style="thin", color="E5E9F0")
 _BORDER = Border(bottom=_THIN)
