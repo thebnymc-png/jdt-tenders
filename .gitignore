@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# PyInstaller build output
+build/JDT_Pricing_Model/
+build/*/
+dist/
+*.spec.bak
+
+# App-generated user data & quotes (created next to the exe at runtime)
+jdt_pricing_data.json
+JDT_Quote_*.pdf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

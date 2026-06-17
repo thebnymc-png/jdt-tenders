@@ -1,0 +1,55 @@
+name: Build Windows EXE
+
+# Builds the portable standalone executable on a real Windows runner and
+# uploads it as a downloadable artifact. Runs on every push to the feature
+# branch and can be triggered manually.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/**"
+      - "run.py"
+      - "requirements.txt"
+      - "build/**"
+      - ".github/workflows/build-exe.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.10.0 pythonnet==3.0.3
+
+      - name: Run engine tests
+        run: node tests/test_engine.js
+
+      - name: Build executable
+        run: pyinstaller --noconfirm --clean build/JDT_Pricing_Model.spec
+
+      - name: Smoke-test the build
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "dist/JDT_Pricing_Model.exe")) {
+            Write-Error "Executable was not produced"; exit 1
+          }
+          $size = (Get-Item "dist/JDT_Pricing_Model.exe").Length
+          Write-Host "Built JDT_Pricing_Model.exe ($([math]::Round($size/1MB,1)) MB)"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JDT_Pricing_Model-windows
+          path: dist/JDT_Pricing_Model.exe
+          if-no-files-found: error
+          retention-days: 90
