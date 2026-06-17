@@ -1,5 +1,7 @@
-const E = require('/home/user/jdt-tenders/app/static/engine.js');
-const S = require('/home/user/jdt-tenders/app/static/seed.js');
+const path = require('path');
+const STATIC = path.join(__dirname, '..', 'app', 'static');
+const E = require(path.join(STATIC, 'engine.js'));
+const S = require(path.join(STATIC, 'seed.js'));
 let fail=0;
 function approx(a,b,eps,msg){ if(Math.abs(a-b)>(eps||0.01)){console.error("FAIL",msg,a,"!=",b);fail++;} else console.log("ok  ",msg,"=",Math.round(a*100)/100);}
 
@@ -40,7 +42,7 @@ approx(wr.base, expCost/(1-0.22), 1e-6, "wh base price");
 console.log("wh decision:", wr.decision);
 
 // Summary + Quote on full seed
-const seedLanes = require('/home/user/jdt-tenders/app/static/seed_lanes.json');
+const seedLanes = require(path.join(STATIC, 'seed_lanes.json'));
 const state = S.defaultState(seedLanes);
 state.lanes[0]=Object.assign(state.lanes[0],{spaces:6,trips:5,hrs:4,km:60,quote:"Y"});
 state.accounts[0]=acc;

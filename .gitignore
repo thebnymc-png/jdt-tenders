@@ -8,6 +8,7 @@ venv/
 # PyInstaller build output
 build/JDT_Pricing_Model/
 build/*/
+build/build.log
 dist/
 *.spec.bak
 
