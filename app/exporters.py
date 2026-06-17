@@ -244,6 +244,64 @@ def export_tenders_excel(payload, out_path):
     wb.save(out_path)
 
 
+# Column headers match the import auto-mapper keywords so an uploaded copy of
+# this template maps onto JDT lane fields with no manual mapping.
+TEMPLATE_HEADERS = [
+    "Collection postcode", "Collection suburb", "Delivery postcode", "Delivery suburb",
+    "Pallets", "Weight (kg)", "Dimensions (LxWxH)", "Stackable (Y/N)", "Loading type",
+    "Vehicle", "Frequency per week", "Hours per trip", "Km per trip",
+]
+TEMPLATE_EXAMPLES = [
+    ["4110", "Acacia Ridge", "4116", "Sunnybank", 6, 420, "1.2x1.0x1.6", "Y", "Tail-lift", "Rigid", 5, 4, 60],
+    ["4110", "Acacia Ridge", "4350", "Toowoomba", 22, 9000, "Std pallet", "Y", "Forklift", "Semi", 3, 9, 130],
+]
+
+
+def export_import_template(payload, out_path):
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tender Lanes"
+    _header_row(ws, 1, TEMPLATE_HEADERS)
+    ws.freeze_panes = "A2"
+    for r, row in enumerate(TEMPLATE_EXAMPLES, start=2):
+        for cidx, val in enumerate(row, start=1):
+            ws.cell(row=r, column=cidx, value=val)
+
+    # dropdowns for the constrained columns (rows 2..500)
+    def add_list(col_letter, options):
+        dv = DataValidation(type="list", formula1='"%s"' % ",".join(options), allow_blank=True)
+        ws.add_data_validation(dv)
+        dv.add("%s2:%s500" % (col_letter, col_letter))
+
+    add_list("H", ["Y", "N"])
+    add_list("I", ["Tail-lift", "Dock / Ramp", "Forklift", "Hand unload", "Crane", "Side-loader"])
+    add_list("J", ["Ute", "Rigid", "Semi", "Bdouble"])
+    _autofit(ws)
+
+    # instructions sheet
+    info = wb.create_sheet("How to use")
+    info["A1"] = "JDT Tender Lane Import Template"
+    info["A1"].font = _TITLE_FONT
+    notes = [
+        "",
+        "1. Enter one row per lane on the 'Tender Lanes' sheet (example rows included — overwrite or delete them).",
+        "2. Keep the header row as-is so the importer maps the columns automatically.",
+        "3. Postcodes/suburbs are used to plot the lane network on the map (needs internet).",
+        "4. Pricing fields the cost engine uses: Pallets, Vehicle, Frequency per week, Hours per trip, Km per trip.",
+        "5. Operational-only fields (Weight, Dimensions, Stackable, Loading type) are stored for reference.",
+        "6. Save the file, then in the app open a tender -> Operational Lanes -> Import from Excel -> upload this file.",
+        "",
+        "Vehicle options:  Ute, Rigid, Semi, Bdouble",
+        "Loading options:  Tail-lift, Dock / Ramp, Forklift, Hand unload, Crane, Side-loader",
+    ]
+    for i, line in enumerate(notes, start=2):
+        info.cell(row=i, column=1, value=line)
+    info.column_dimensions["A"].width = 100
+    wb.save(out_path)
+
+
 def export_quote_excel(payload, out_path):
     quote = payload.get("quote", {})
     comp = payload.get("computed", {})
@@ -457,6 +515,7 @@ _DISPATCH = {
     "quote-excel": (export_quote_excel, "JDT_Quote", "xlsx"),
     "tenders-excel": (export_tenders_excel, "JDT_Tenders", "xlsx"),
     "tenders-pdf": (export_tenders_pdf, "JDT_Tenders", "pdf"),
+    "import-template": (export_import_template, "JDT_Tender_Import_Template", "xlsx"),
 }
 
 

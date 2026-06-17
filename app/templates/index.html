@@ -405,6 +405,10 @@
           <p class="sub">Upload a supplier tender workbook (.xlsx). You'll map its columns to JDT lane fields next — any layout works.</p>
           <input type="file" id="importFile" accept=".xlsx,.xlsm,.xls" style="margin-top:8px">
           <div id="importStatus" class="import-status"></div>
+          <div class="import-tpl">
+            <span>Don't have a file?</span>
+            <button class="btn btn-sm" id="importTemplate">⤓ Download blank template</button>
+          </div>
         </div>
         <div id="importStep2" hidden>
           <label class="imp-sheet">Sheet <select id="importSheet"></select></label>

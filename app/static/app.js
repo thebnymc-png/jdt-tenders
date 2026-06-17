@@ -578,25 +578,29 @@
 
   // ---- EXCEL IMPORT (flexible column mapping) ------------------------------
   var importData = null;  // { sheets:[{name,headers,rows}] }
+  // keys are ordered most-specific first; matched as case-insensitive substrings
   var IMPORT_FIELDS = [
-    ["collPostcode", "Collection postcode", ["coll", "pickup", "origin", "from"]],
-    ["collSuburb", "Collection suburb/town", ["coll", "pickup", "origin", "suburb", "town"]],
-    ["delPostcode", "Delivery postcode", ["del", "drop", "dest", "to"]],
-    ["delSuburb", "Delivery suburb/town", ["del", "drop", "dest", "suburb", "town"]],
-    ["pallets", "Pallets", ["pallet", "qty", "units", "spaces"]],
-    ["weightKg", "Weight (kg)", ["weight", "kg", "mass"]],
-    ["dims", "Dimensions", ["dim", "size", "lwh"]],
-    ["stackable", "Stackable", ["stack"]],
-    ["loadingType", "Loading type", ["load", "handling"]],
-    ["vehicle", "Vehicle", ["vehicle", "truck", "equip"]],
-    ["freq", "Frequency / week", ["freq", "trips", "loads", "per week", "/wk", "shipments"]],
-    ["hrs", "Hours / trip", ["hours", "hrs", "time"]],
-    ["km", "Km / trip", ["km", "distance", "kms"]]
+    ["collPostcode", "Collection postcode", ["collection postcode", "coll postcode", "coll pc", "origin postcode", "pickup postcode", "from postcode"]],
+    ["collSuburb", "Collection suburb/town", ["collection suburb", "coll suburb", "collection town", "origin suburb", "pickup suburb", "pickup town"]],
+    ["delPostcode", "Delivery postcode", ["delivery postcode", "del postcode", "del pc", "destination postcode", "drop postcode", "to postcode"]],
+    ["delSuburb", "Delivery suburb/town", ["delivery suburb", "del suburb", "delivery town", "destination suburb", "drop suburb"]],
+    ["pallets", "Pallets", ["pallet", "spaces", "units", "qty"]],
+    ["weightKg", "Weight (kg)", ["weight", "mass"]],
+    ["dims", "Dimensions", ["dimension", "dims", "lxwxh", "size"]],
+    ["stackable", "Stackable", ["stackable", "stack"]],
+    ["loadingType", "Loading type", ["loading", "load type", "handling"]],
+    ["vehicle", "Vehicle", ["vehicle", "truck", "equipment"]],
+    ["freq", "Frequency / week", ["frequency", "per week", "/wk", "freq", "trips", "loads"]],
+    ["hrs", "Hours / trip", ["hours", "hrs", "time per"]],
+    ["km", "Km / trip", ["km", "kms", "distance"]]
   ];
-  function guessColumn(headers, keys) {
-    for (var i = 0; i < headers.length; i++) {
-      var h = String(headers[i]).toLowerCase();
-      for (var k = 0; k < keys.length; k++) if (h.indexOf(keys[k]) >= 0) return i;
+  // Try each key across all not-yet-used columns (specific keys first).
+  function guessColumn(headers, keys, used) {
+    for (var k = 0; k < keys.length; k++) {
+      for (var i = 0; i < headers.length; i++) {
+        if (used[i]) continue;
+        if (String(headers[i]).toLowerCase().indexOf(keys[k]) >= 0) return i;
+      }
     }
     return -1;
   }
@@ -611,15 +615,18 @@
   function renderImportMapping() {
     var sheet = importData.sheets[parseInt(el("importSheet").value, 10)] || importData.sheets[0];
     el("importRowInfo").textContent = "(" + sheet.rowCount + " data rows)";
-    var colOpts = '<option value="-1">—</option>' + sheet.headers.map(function (h, i) { return '<option value="' + i + '">' + esc(h) + "</option>"; }).join("");
+    var used = {};
     el("importMap").innerHTML = IMPORT_FIELDS.map(function (f) {
-      var guess = guessColumn(sheet.headers, f[2]);
-      var opts = colOpts.replace('value="' + guess + '"', 'value="' + guess + '" selected');
+      var guess = guessColumn(sheet.headers, f[2], used);
+      if (guess >= 0) used[guess] = true;
+      var opts = '<option value="-1"' + (guess < 0 ? " selected" : "") + ">—</option>" +
+        sheet.headers.map(function (h, i) { return '<option value="' + i + '"' + (i === guess ? " selected" : "") + ">" + esc(h) + "</option>"; }).join("");
       return '<label>' + f[1] + '<select data-imp="' + f[0] + '">' + opts + "</select></label>";
     }).join("");
   }
   function bindImport() {
     el("importClose").addEventListener("click", closeImport);
+    el("importTemplate").addEventListener("click", function () { doExport("import-template"); });
     el("importModal").addEventListener("click", function (e) { if (e.target === el("importModal")) closeImport(); });
     el("importBack").addEventListener("click", function () {
       el("importStep1").hidden = false; el("importStep2").hidden = true; el("importBack").hidden = true; el("importDo").hidden = true;
@@ -766,7 +773,8 @@
     { id: "data-pdf", tag: "PDF", title: "Working Data", desc: "Priced lanes and warehousing accounts." },
     { id: "quote-excel", tag: "Excel", title: "Quote Spreadsheet", desc: "The customer quote as an .xlsx." },
     { id: "tenders-excel", tag: "Excel", title: "Tender Register", desc: "All tenders plus pipeline totals." },
-    { id: "tenders-pdf", tag: "PDF", title: "Tender Register", desc: "Printable register with pipeline summary." }
+    { id: "tenders-pdf", tag: "PDF", title: "Tender Register", desc: "Printable register with pipeline summary." },
+    { id: "import-template", tag: "Template", title: "Tender Import Template", desc: "Blank Excel template for importing tender lanes." }
   ];
   function renderReports() {
     el("reportGrid").innerHTML = REPORTS.map(function (r) {
