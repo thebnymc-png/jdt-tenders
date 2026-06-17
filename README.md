@@ -16,11 +16,17 @@ high-volume, professional use:
 
 - **Collapsible sidebar** IA: Active Tenders, Bid Analysis · Settings, Lanes,
   Warehousing, Leg Builder, Quote, Portfolio · Carrier Network, Compliance · Reports.
-- **Active Tenders** — a dense, sortable grid (route, volume, deadline, bids,
-  value, status) with inline hover actions (Edit / Award / Reject), expandable
-  rows showing competing bids, and a **slide-out detail panel** with an editable
-  form, a **live route map** (OpenStreetMap; needs internet, degrades gracefully
-  offline) and full bid management.
+- **Active Tenders** — a dense, sortable grid (lanes, pallets/wk, deadline,
+  bids, engine-priced bid value, status) with inline hover actions
+  (Edit / Award / Reject) and expandable rows showing competing bids.
+- **Tender workspace** — each tender opens a full-page RFQ with sections:
+  Overview, **Operational Lanes** (collection/delivery postcodes, pallets,
+  weights, dimensions, stackability, loading type — each priced by the cost
+  engine), **Volume History** (12-month seasonality), Schedule, Commercial,
+  Technology, Contract, and Bids, plus a **live network map** (OpenStreetMap;
+  needs internet, degrades gracefully offline).
+- **Excel import** — upload any supplier tender workbook and map its columns
+  to JDT lane fields (auto-guessed) to bulk-create priced operational lanes.
 - **Bid Analysis** — pipeline-by-status and value-by-status breakdowns plus
   portfolio economics.
 - **Carrier Network & Compliance** — editable registers (Compliance ships seeded

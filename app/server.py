@@ -18,6 +18,7 @@ from flask import Flask, jsonify, request, send_from_directory, render_template
 from . import paths
 from .pdf_quote import generate_quote_pdf, build_filename
 from .exporters import run_export
+from .importer import parse_workbook
 
 
 def create_app() -> Flask:
@@ -77,6 +78,18 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "error": str(exc)}), 500
         _open_file(out_path)
         return jsonify({"ok": True, "filename": filename, "path": out_path})
+
+    @app.route("/api/import/excel", methods=["POST"])
+    def import_excel():
+        f = request.files.get("file")
+        if not f:
+            return jsonify({"ok": False, "error": "no file uploaded"}), 400
+        try:
+            data = parse_workbook(f.read())
+        except Exception as exc:  # noqa: BLE001 - surface parse errors to the UI
+            return jsonify({"ok": False, "error": "Could not read workbook: " + str(exc)}), 500
+        data["ok"] = True
+        return jsonify(data)
 
     @app.route("/api/ping")
     def ping():

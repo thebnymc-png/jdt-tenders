@@ -43,7 +43,7 @@
     if (!Array.isArray(s.lanes) || !s.lanes.length) s.lanes = base.lanes;
     if (!Array.isArray(s.accounts) || !s.accounts.length) s.accounts = base.accounts;
     if (!Array.isArray(s.tenders)) s.tenders = [];
-    s.tenders.forEach(function (t) { if (!Array.isArray(t.bids)) t.bids = []; });
+    s.tenders.forEach(normalizeTender);
     if (!Array.isArray(s.carriers)) s.carriers = [];
     if (!Array.isArray(s.compliance) || !s.compliance.length) s.compliance = base.compliance;
     return s;
@@ -66,10 +66,28 @@
   }
   function getTender(id) { return state.tenders.find(function (t) { return t.id === id; }); }
 
+  // Bring a saved tender up to the current rich RFQ shape.
+  function normalizeTender(t) {
+    if (!Array.isArray(t.bids)) t.bids = [];
+    if (!Array.isArray(t.lanes)) t.lanes = [];
+    if (!Array.isArray(t.volumeHistory) || !t.volumeHistory.length) t.volumeHistory = Seed.defaultVolume();
+    t.contract = Object.assign({ duration: "12 months", startDate: "", accessorials: "", disputeRules: "" }, t.contract || {});
+    t.schedule = Object.assign({ collectionWindows: "", deliveryTimeframes: "", weekend: "", bookingRules: "" }, t.schedule || {});
+    t.commercial = Object.assign({ fuelSurcharge: "", paymentTerms: "", claims: "", minInsurance: "", serviceCredits: "" }, t.commercial || {});
+    t.technology = Object.assign({ tracking: "", ediApi: "", pod: "" }, t.technology || {});
+    // migrate a legacy single-route tender into one operational lane
+    if ((t.origin || t.destination) && !t.lanes.length) {
+      t.lanes.push(Seed.newOpLane({ collSuburb: t.origin, delSuburb: t.destination, pallets: t.volume }));
+    }
+    delete t.origin; delete t.destination; delete t.volume;
+    t.lanes.forEach(function (l) { if (!l.id) l.id = Seed.newOpLane().id; });
+  }
+
   // ---- navigation ----------------------------------------------------------
   function gotoView(view) {
     currentView = view;
-    document.querySelectorAll(".sb-item").forEach(function (b) { b.classList.toggle("active", b.dataset.view === view); });
+    var navKey = view === "tender" ? "active-tenders" : view;  // keep parent highlighted on drill-down
+    document.querySelectorAll(".sb-item").forEach(function (b) { b.classList.toggle("active", b.dataset.view === navKey); });
     document.querySelectorAll(".view").forEach(function (p) { p.classList.remove("active"); });
     var panel = el("view-" + view); if (panel) panel.classList.add("active");
     el("views").scrollTop = 0;
@@ -84,6 +102,7 @@
   function renderActive(view) {
     switch (view) {
       case "active-tenders": renderActiveTenders(); break;
+      case "tender": renderTender(); break;
       case "bid-analysis": renderBidAnalysis(); break;
       case "settings": renderSettings(); break;
       case "lanes": renderLanes(); break;
@@ -139,11 +158,11 @@
   var COLS = [
     { key: "reference", label: "Reference" },
     { key: "customer", label: "Customer" },
-    { key: "route", label: "Route" },
-    { key: "volume", label: "Volume", num: true },
+    { key: "lanes", label: "Lanes", num: true },
+    { key: "volume", label: "Pallets/wk", num: true },
     { key: "dueDate", label: "Deadline" },
     { key: "bids", label: "Bids", num: true },
-    { key: "value", label: "Value", num: true },
+    { key: "value", label: "Bid value", num: true },
     { key: "status", label: "Status" }
   ];
   var sortState = { key: "dueDate", dir: 1 };
@@ -151,10 +170,21 @@
   var expanded = {};   // id -> true
   var selectedId = null;
 
+  // Bid value = engine-priced annual revenue when the tender has lanes,
+  // otherwise the manually entered value.
+  function tenderValue(t) {
+    return (t.lanes && t.lanes.length) ? E.computeTender(t, state.settings).annualRev : E.num(t.value);
+  }
+  function tenderPallets(t) { return E.computeTender(t, state.settings).totalPalletsWk; }
+  function syncTenderValue(t) {
+    if (t.lanes && t.lanes.length) t.value = Math.round(E.computeTender(t, state.settings).annualRev);
+  }
+
   function sortVal(t, key) {
-    if (key === "route") return (t.origin || "") + (t.destination || "");
+    if (key === "lanes") return (t.lanes || []).length;
     if (key === "bids") return (t.bids || []).length;
-    if (key === "value" || key === "volume") return E.num(t[key]);
+    if (key === "volume") return tenderPallets(t);
+    if (key === "value") return tenderValue(t);
     return (t[key] || "").toString().toLowerCase();
   }
   function visibleTenders() {
@@ -162,7 +192,7 @@
     var rows = state.tenders.filter(function (t) {
       if (tenderFilter.status && (t.status || "Draft") !== tenderFilter.status) return false;
       if (q) {
-        var hay = [t.reference, t.customer, t.title, t.origin, t.destination].join(" ").toLowerCase();
+        var hay = [t.reference, t.customer, t.title].join(" ").toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -184,17 +214,17 @@
   }
   function tenderRow(t) {
     var due = E.tenderDueState(t), dueCls = due === "overdue" ? "due-overdue" : due === "soon" ? "due-soon" : "";
-    var route = (t.origin || t.destination) ? (esc(t.origin || "—") + " → " + esc(t.destination || "—")) : '<span style="color:var(--text-3)">—</span>';
+    var pallets = tenderPallets(t), val = tenderValue(t);
     var open = expanded[t.id];
     var h = '<tr data-tid="' + t.id + '" class="' + (selectedId === t.id ? "sel" : "") + (open ? " expanded" : "") + '">' +
       '<td><span class="exp" data-exp="' + t.id + '">' + (t.bids && t.bids.length ? "▸" : "") + "</span></td>" +
       "<td><b>" + (esc(t.reference) || '<span style="color:var(--text-3)">—</span>') + "</b></td>" +
       "<td>" + (esc(t.customer) || '<span style="color:var(--text-3)">—</span>') + "</td>" +
-      "<td>" + route + "</td>" +
-      '<td class="num">' + (E.num(t.volume) ? fmtNum(t.volume) : "—") + "</td>" +
+      '<td class="num">' + ((t.lanes || []).length || "—") + "</td>" +
+      '<td class="num">' + (pallets ? fmtNum(Math.round(pallets)) : "—") + "</td>" +
       '<td class="' + dueCls + '">' + (esc(t.dueDate) || "—") + "</td>" +
       '<td class="num">' + ((t.bids || []).length || "—") + "</td>" +
-      '<td class="num">' + (E.num(t.value) ? fmtMoney(t.value) : "—") + "</td>" +
+      '<td class="num">' + (val ? fmtMoney(val) : "—") + "</td>" +
       "<td>" + badge(t.status) + "</td>" +
       '<td><div class="row-actions">' +
         '<button data-edit="' + t.id + '">Edit</button>' +
@@ -248,91 +278,169 @@
       if (award) { setTenderStatus(award.dataset.award, "Won"); return; }
       if (reject) { setTenderStatus(reject.dataset.reject, "Lost"); return; }
       var tr = e.target.closest("[data-tid]"); if (!tr) return;
-      openCtx(edit ? edit.dataset.edit : tr.dataset.tid);
+      openTender(edit ? edit.dataset.edit : tr.dataset.tid);
     });
     el("btnCaptureTender").addEventListener("click", function () {
       var t = Seed.newTender({ customer: state.quote.customer || "", reference: state.quote.quoteNumber || "", title: "Captured " + today() });
-      captureInto(t); state.tenders.unshift(t); renderActiveTenders(); save(); openCtx(t.id);
+      captureInto(t); state.tenders.unshift(t); save(); openTender(t.id);
       toast("Captured current model as a new tender.");
     });
     el("btnNewTender").addEventListener("click", function () {
       var t = Seed.newTender({ customer: state.quote.customer || "", reference: state.quote.quoteNumber || "" });
-      state.tenders.unshift(t); markDirty();
-      if (currentView !== "active-tenders") gotoView("active-tenders"); else renderActiveTenders();
-      openCtx(t.id);
+      state.tenders.unshift(t); markDirty(); openTender(t.id);
     });
   }
   function setTenderStatus(id, status) {
     var t = getTender(id); if (!t) return;
     t.status = status; touchTender(t);
     if (currentView === "active-tenders") renderActiveTenders();
-    if (selectedId === id) openCtx(id);
+    if (currentView === "tender" && currentTenderId === id) renderTender();
     markDirty();
   }
   function today() { return new Date().toISOString().slice(0, 10); }
   function touchTender(t) { t.updatedAt = today(); }
+  // Capture the current priced Lanes (flagged Quote? = Y) into the tender as
+  // operational lanes, plus a snapshot of the full model.
   function captureInto(t) {
     t.snapshot = snapshotModel();
-    var q = E.buildQuote(state);
-    if (q.totalAnnual > 0) t.value = Math.round(q.totalAnnual);
     if (!t.customer) t.customer = state.quote.customer || "";
     if (!t.reference) t.reference = state.quote.quoteNumber || "";
-    // seed route from first flagged lane
-    var firstLane = (q.transport && q.transport[0]) || null;
-    if (firstLane) { if (!t.origin) t.origin = firstLane.origin; if (!t.destination) t.destination = firstLane.dest; }
+    var q = E.buildQuote(state);
+    if (q.transport && q.transport.length) {
+      t.lanes = q.transport.map(function (r, i) {
+        var src = state.lanes.filter(function (l) { return String(l.quote || "").toUpperCase() === "Y"; })[i] || {};
+        return Seed.newOpLane({
+          collSuburb: r.origin, delSuburb: r.dest, vehicle: r.vehicle, pallets: r.spaces, freq: r.trips,
+          hrs: src.hrs, km: src.km, tolls: src.tolls, overnight: src.overnight, loadExtras: src.loadExtras
+        });
+      });
+    }
+    syncTenderValue(t);
     touchTender(t);
   }
 
-  // ---- CONTEXTUAL DETAIL PANEL --------------------------------------------
-  function openCtx(id) {
-    var t = getTender(id); if (!t) return;
-    selectedId = id;
-    var statusOpts = Seed.TENDER_STATUSES.map(function (s) { return '<option' + (s === t.status ? " selected" : "") + ">" + s + "</option>"; }).join("");
-    function f(label, field, type, full) {
-      return '<label class="' + (full ? "full" : "") + '">' + label +
-        '<input data-cf="' + field + '" type="' + (type || "text") + '" value="' + esc(t[field]) + '"></label>';
-    }
-    var bids = (t.bids || []).map(bidRowHtml).join("");
-    var html =
-      '<div class="ctx-head"><div style="flex:1;min-width:0">' +
-        '<div class="ref">' + (esc(t.reference) || "TENDER") + "</div>" +
-        "<h2>" + (esc(t.customer) || "Untitled tender") + "</h2>" + badge(t.status) +
-      '</div><button class="icon-btn" id="ctxClose" title="Close"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
-      '<div class="ctx-body">' +
-        '<div class="ctx-sec"><h4>Details</h4><div class="fgrid">' +
-          f("Reference", "reference") + f("Customer", "customer") +
-          f("Title", "title", "text", true) +
-          f("Origin", "origin") + f("Destination", "destination") +
-          f("Volume (pallets/wk)", "volume", "number") +
-          '<label>Status<select data-cf="status">' + statusOpts + "</select></label>" +
-          f("Deadline", "dueDate", "date") +
-          f("Contract value $", "value", "number") + f("Probability %", "probability", "number") +
-          f("Owner", "owner") +
-          '<label class="full">Notes<textarea data-cf="notes">' + esc(t.notes) + "</textarea></label>" +
-        "</div></div>" +
-        '<div class="ctx-sec"><h4>Route</h4>' +
-          '<div class="route-chip"><span class="dot2"></span>' + (esc(t.origin) || "Origin") + '<span class="line"></span>' + (esc(t.destination) || "Destination") + '<span class="dot2"></span></div>' +
-          '<div id="ctxMap"><div class="map-fallback">Loading map…</div></div></div>' +
-        '<div class="ctx-sec"><h4>Competing bids</h4><div class="bidlist" id="ctxBids">' + (bids || '<div style="color:var(--text-3);font-size:12px">No bids recorded.</div>') + "</div>" +
-          '<button class="btn btn-sm" id="ctxAddBid" style="margin-top:9px">+ Add bid</button></div>' +
-        (t.snapshot ? '<div class="ctx-sec"><h4>Snapshot</h4><div style="font-size:12px;color:var(--text-2)">Priced model saved ' + esc(t.updatedAt) + ". Load it to restore the workspace.</div></div>" : "") +
-      "</div>" +
-      '<div class="ctx-foot">' +
-        (t.snapshot ? '<button class="btn" id="ctxLoad">↺ Load snapshot</button>' : "") +
-        '<button class="btn" id="ctxCapture">⧉ Save current model</button>' +
-        '<button class="btn" id="ctxDelete" style="margin-left:auto;color:var(--nogo)">Delete</button>' +
-      "</div>";
-    var ctx = el("ctx");
-    ctx.innerHTML = html; ctx.classList.add("open"); ctx.setAttribute("aria-hidden", "false");
-    el("ctxScrim").hidden = false;
-    if (currentView === "active-tenders") renderActiveTenders();
-    bindCtx(t);
-    renderMap(t);
+  // ---- TENDER WORKSPACE (full-page RFQ) -----------------------------------
+  var currentTenderId = null, currentSection = "overview";
+  var SECTIONS = ["overview", "lanes", "volume", "schedule", "commercial", "technology", "contract", "bids"];
+
+  function openTender(id) { currentTenderId = id; currentSection = "overview"; gotoView("tender"); }
+
+  function renderTender() {
+    var t = getTender(currentTenderId); if (!t) { gotoView("active-tenders"); return; }
+    el("twRef").textContent = t.reference || "TENDER";
+    el("twCustomer").textContent = t.customer || "Untitled tender";
+    el("twStatusBadge").innerHTML = badge(t.status);
+    el("twStatus").innerHTML = Seed.TENDER_STATUSES.map(function (s) { return '<option' + (s === t.status ? " selected" : "") + ">" + s + "</option>"; }).join("");
+    el("twTabs").querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.dataset.sec === currentSection); });
+    renderTenderKpis(t);
+    renderSection();
   }
-  function closeCtx() {
-    el("ctx").classList.remove("open"); el("ctx").setAttribute("aria-hidden", "true");
-    el("ctxScrim").hidden = true; selectedId = null;
-    if (currentView === "active-tenders") renderActiveTenders();
+  function renderTenderKpis(t) {
+    var c = E.computeTender(t, state.settings);
+    renderStrip("twKpis", [
+      { k: "Annual bid value", v: fmtMoney(c.annualRev), s: c.laneCount + " lane" + (c.laneCount === 1 ? "" : "s") },
+      { k: "Weekly GP", v: fmtMoney(c.weeklyGP), s: "gross profit / wk", cls: "good" },
+      { k: "Blended margin", v: fmtPct(c.margin), s: "target " + state.settings.targetMarginPct + "%", cls: "good" },
+      { k: "Lanes priced", v: c.go + " / " + c.review + " / " + c.nogo, s: "GO / REVIEW / NO-GO" },
+      { k: "Pallets / wk", v: fmtNum(Math.round(c.totalPalletsWk)), s: "throughput" },
+      { k: "Win probability", v: E.num(t.probability) + "%", s: t.status }
+    ]);
+  }
+
+  // section HTML builders ----------------------------------------------------
+  function field(label, attr, value, type, full) {
+    return '<label class="' + (full ? "full" : "") + '">' + label +
+      '<input ' + attr + ' type="' + (type || "text") + '" value="' + esc(value) + '"></label>';
+  }
+  function area(label, attr, value) {
+    return '<label class="full">' + label + '<textarea ' + attr + ' rows="2">' + esc(value) + "</textarea></label>";
+  }
+  function overviewHtml(t) {
+    return '<div class="tw-section">' +
+      '<div class="form-card"><h3>Overview</h3><div class="fgrid">' +
+        field("Reference", 'data-tf="reference"', t.reference) +
+        field("Customer", 'data-tf="customer"', t.customer) +
+        field("Title", 'data-tf="title"', t.title, "text", true) +
+        field("Deadline", 'data-tf="dueDate"', t.dueDate, "date") +
+        field("Submitted", 'data-tf="submittedDate"', t.submittedDate, "date") +
+        field("Owner", 'data-tf="owner"', t.owner) +
+        field("Win probability %", 'data-tf="probability"', t.probability, "number") +
+        area("Notes", 'data-tf="notes"', t.notes) +
+      "</div></div>" +
+      '<div class="form-card"><h3>Lane network</h3><div id="tenderMap" class="tw-map"><div class="map-fallback">Loading map…</div></div></div>' +
+      "</div>";
+  }
+  var LANE_COLS_HTML =
+    '<colgroup><col style="width:80px"><col style="width:130px"><col style="width:80px"><col style="width:130px">' +
+    '<col style="width:70px"><col style="width:80px"><col style="width:120px"><col style="width:64px"><col style="width:120px"><col style="width:96px">' +
+    '<col style="width:72px"><col style="width:70px"><col style="width:74px">' +
+    '<col style="width:88px"><col style="width:90px"><col style="width:74px"><col style="width:88px"><col style="width:100px"><col style="width:40px"></colgroup>' +
+    '<thead><tr><th class="l">Coll PC</th><th class="l">Coll suburb</th><th class="l">Del PC</th><th class="l">Del suburb</th>' +
+    '<th>Pallets</th><th>Weight kg</th><th class="l">Dims</th><th class="l">Stack</th><th class="l">Loading</th><th class="l">Vehicle</th>' +
+    '<th>Freq/wk</th><th>Hrs</th><th>Km</th><th>Cost/trip</th><th>Rate+FL</th><th>Margin</th><th>Decision</th><th>Annual $</th><th></th></tr></thead>';
+  function opLaneRowHtml(l, s) {
+    var r = E.priceOpLane(l, s);
+    function inp(f) { return '<input data-ln="' + l.id + '" data-lf="' + f + '" value="' + esc(l[f]) + '" inputmode="decimal">'; }
+    function txt(f) { return '<input class="txt" data-ln="' + l.id + '" data-lf="' + f + '" value="' + esc(l[f]) + '">'; }
+    function sel(f, opts) { return '<select data-ln="' + l.id + '" data-lf="' + f + '">' + opts.map(function (o) { return '<option' + (o === l[f] ? " selected" : "") + ">" + o + "</option>"; }).join("") + "</select>"; }
+    return '<tr class="row-' + (r.decision || "none") + '" data-lrow="' + l.id + '">' +
+      '<td class="txt">' + txt("collPostcode") + '</td><td class="txt">' + txt("collSuburb") + '</td>' +
+      '<td class="txt">' + txt("delPostcode") + '</td><td class="txt">' + txt("delSuburb") + '</td>' +
+      "<td>" + inp("pallets") + "</td><td>" + inp("weightKg") + '</td><td class="txt">' + txt("dims") + "</td>" +
+      '<td class="txt">' + sel("stackable", ["Y", "N"]) + '</td><td class="txt">' + sel("loadingType", Seed.LOADING_TYPES) + '</td><td class="txt">' + sel("vehicle", Seed.VEHICLES) + "</td>" +
+      "<td>" + inp("freq") + "</td><td>" + inp("hrs") + "</td><td>" + inp("km") + "</td>" +
+      '<td class="calc">' + fmtMoney2(r.cost) + '</td><td class="calc">' + fmtMoney2(r.priceFL) + "</td>" +
+      '<td class="calc">' + (r.decision ? fmtPct(r.margin) : "—") + "</td>" +
+      '<td class="calc cell-dec dec-' + (r.decision || "") + '">' + (r.decision || "—") + "</td>" +
+      '<td class="calc">' + fmtMoney(r.annualRev) + "</td>" +
+      '<td><button class="rowdel" data-lanedel="' + l.id + '" title="Delete lane">×</button></td></tr>';
+  }
+  function lanesHtml(t, s) {
+    var rows = (t.lanes || []).map(function (l) { return opLaneRowHtml(l, s); }).join("");
+    return '<div class="tw-toolbar"><button class="btn" data-addlane>+ Add lane</button>' +
+      '<button class="btn" data-import><svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg> Import from Excel</button></div>' +
+      '<div class="grid-wrap"><table class="pgrid" id="tenderLanes">' + LANE_COLS_HTML + "<tbody>" +
+      (rows || '<tr><td colspan="19" class="empty">No lanes yet. Add one or import from Excel.</td></tr>') +
+      "</tbody></table></div>";
+  }
+  function recalcOpLaneRow(t, l) {
+    var tr = el("tenderLanes") && el("tenderLanes").querySelector('tr[data-lrow="' + l.id + '"]'); if (!tr) return;
+    var r = E.priceOpLane(l, state.settings), c = tr.querySelectorAll("td.calc");
+    c[0].textContent = fmtMoney2(r.cost); c[1].textContent = fmtMoney2(r.priceFL);
+    c[2].textContent = r.decision ? fmtPct(r.margin) : "—";
+    c[3].textContent = r.decision || "—"; c[3].className = "calc cell-dec dec-" + (r.decision || "");
+    c[4].textContent = fmtMoney(r.annualRev); tr.className = "row-" + (r.decision || "none");
+  }
+  function volBarsHtml(t) {
+    var max = Math.max(1, Math.max.apply(null, t.volumeHistory.map(function (v) { return E.num(v.shipments); })));
+    return t.volumeHistory.map(function (v) {
+      var h = E.num(v.shipments) / max * 130;
+      return '<div class="vol-col"><div class="vol-bar" style="height:' + Math.max(2, h).toFixed(0) + 'px" title="' + E.num(v.shipments) + ' shipments"></div><div class="vol-m">' + v.month + "</div></div>";
+    }).join("");
+  }
+  function volumeHtml(t) {
+    var totS = t.volumeHistory.reduce(function (a, v) { return a + E.num(v.shipments); }, 0);
+    var totP = t.volumeHistory.reduce(function (a, v) { return a + E.num(v.pallets); }, 0);
+    var rows = t.volumeHistory.map(function (v, i) {
+      return "<tr><td class=\"txt\" style=\"padding:0 10px\">" + v.month + "</td>" +
+        '<td><input data-vol="' + i + '" data-vf="shipments" value="' + esc(v.shipments) + '" inputmode="decimal"></td>' +
+        '<td><input data-vol="' + i + '" data-vf="pallets" value="' + esc(v.pallets) + '" inputmode="decimal"></td></tr>';
+    }).join("");
+    return '<div class="tw-section"><div class="form-card"><h3>Monthly shipment history (12-month seasonality)</h3>' +
+      '<div class="vol-grid" id="volBars">' + volBarsHtml(t) + "</div>" +
+      '<div class="grid-wrap"><table class="pgrid" id="volTable" style="min-width:100%"><colgroup><col style="width:120px"><col><col></colgroup>' +
+      '<thead><tr><th class="l">Month</th><th>Shipments</th><th>Pallets</th></tr></thead><tbody>' + rows + "</tbody>" +
+      '<tfoot><tr><th class="l">Total</th><th id="volTotS">' + fmtNum(totS) + '</th><th id="volTotP">' + fmtNum(totP) + "</th></tr></tfoot></table></div></div>";
+  }
+  function renderVolBars(t) {
+    if (el("volBars")) el("volBars").innerHTML = volBarsHtml(t);
+    if (el("volTotS")) el("volTotS").textContent = fmtNum(t.volumeHistory.reduce(function (a, v) { return a + E.num(v.shipments); }, 0));
+    if (el("volTotP")) el("volTotP").textContent = fmtNum(t.volumeHistory.reduce(function (a, v) { return a + E.num(v.pallets); }, 0));
+  }
+  function sectionForm(title, sec, fields) {
+    return '<div class="tw-section"><div class="form-card"><h3>' + title + '</h3><div class="fgrid">' +
+      fields.map(function (f) { return area(f[0], 'data-ts="' + sec + "." + f[1] + '"', f[2]); }).join("") +
+      "</div></div></div>";
   }
   function bidRowHtml(b) {
     var opts = Seed.BID_STATUSES.map(function (s) { return '<option' + (s === b.status ? " selected" : "") + ">" + s + "</option>"; }).join("");
@@ -343,56 +451,80 @@
       '<button class="btn btn-sm" data-bidaward="1" title="Award this bid">✓</button>' +
       '<button class="btn btn-sm" data-bidremove="1" title="Remove">✕</button></div>';
   }
-  function bindCtx(t) {
-    el("ctxClose").addEventListener("click", closeCtx);
-    el("ctxScrim").onclick = closeCtx;
-    el("ctx").querySelectorAll("[data-cf]").forEach(function (inp) {
-      inp.addEventListener("input", function () {
-        t[inp.dataset.cf] = inp.value; touchTender(t);
-        if (inp.dataset.cf === "status") openCtx(t.id);
-        if (currentView === "active-tenders") renderActiveTenders();
-        if (inp.dataset.cf === "origin" || inp.dataset.cf === "destination") scheduleMap(t);
-        markDirty();
-      });
-    });
-    el("ctxAddBid").addEventListener("click", function () {
-      t.bids.push(Seed.newBid({})); touchTender(t); refreshBids(t); markDirty();
-    });
-    el("ctxBids").addEventListener("input", function (e) {
-      var row = e.target.closest("[data-bid]"); if (!row || !e.target.dataset.bf) return;
-      var b = t.bids.find(function (x) { return x.id === row.dataset.bid; });
-      if (b) { b[e.target.dataset.bf] = e.target.value; touchTender(t); if (currentView === "active-tenders") renderActiveTenders(); markDirty(); }
-    });
-    el("ctxBids").addEventListener("click", function (e) {
-      var row = e.target.closest("[data-bid]"); if (!row) return;
-      var b = t.bids.find(function (x) { return x.id === row.dataset.bid; }); if (!b) return;
-      if (e.target.closest("[data-bidremove]")) { t.bids = t.bids.filter(function (x) { return x.id !== b.id; }); touchTender(t); refreshBids(t); markDirty(); }
-      else if (e.target.closest("[data-bidaward]")) {
-        t.bids.forEach(function (x) { x.status = x.id === b.id ? "Awarded" : (x.status === "Awarded" ? "Pending" : x.status); });
-        t.status = "Won"; if (E.num(b.amount)) t.value = E.num(b.amount); touchTender(t);
-        openCtx(t.id); if (currentView === "active-tenders") renderActiveTenders(); markDirty();
-        toast("Bid awarded — tender marked Won.");
-      }
-    });
-    var loadBtn = el("ctxLoad");
-    if (loadBtn) loadBtn.addEventListener("click", function () {
-      if (!confirm("Load this tender's snapshot?\n\nReplaces the current workspace (Settings, Lanes, Warehousing, Quote). The tender register is kept.")) return;
-      restoreModel(t.snapshot); save(); toast("Snapshot loaded into workspace."); gotoView("summary");
-    });
-    el("ctxCapture").addEventListener("click", function () { captureInto(t); openCtx(t.id); if (currentView === "active-tenders") renderActiveTenders(); save(); toast("Saved current model onto tender."); });
-    el("ctxDelete").addEventListener("click", function () {
+  function bidsHtml(t) {
+    var bids = (t.bids || []).map(bidRowHtml).join("");
+    return '<div class="tw-section"><div class="form-card"><h3>Competing carrier bids</h3><div class="bidlist">' +
+      (bids || '<div style="color:var(--text-3);font-size:12px">No bids recorded.</div>') +
+      '</div><button class="btn btn-sm" data-addbid style="margin-top:10px">+ Add bid</button></div></div>';
+  }
+  function renderSection() {
+    var t = getTender(currentTenderId); if (!t) { gotoView("active-tenders"); return; }
+    var sec = currentSection, body = el("twBody");
+    if (sec === "overview") { body.innerHTML = overviewHtml(t); renderTenderMap(t); }
+    else if (sec === "lanes") body.innerHTML = lanesHtml(t, state.settings);
+    else if (sec === "volume") body.innerHTML = volumeHtml(t);
+    else if (sec === "schedule") body.innerHTML = sectionForm("Scheduling", "schedule", [["Collection windows", "collectionWindows", t.schedule.collectionWindows], ["Delivery timeframes", "deliveryTimeframes", t.schedule.deliveryTimeframes], ["Weekend / out-of-hours requirements", "weekend", t.schedule.weekend], ["Booking rules", "bookingRules", t.schedule.bookingRules]]);
+    else if (sec === "commercial") body.innerHTML = sectionForm("Commercial terms", "commercial", [["Fuel surcharge method", "fuelSurcharge", t.commercial.fuelSurcharge], ["Payment terms", "paymentTerms", t.commercial.paymentTerms], ["Claims process", "claims", t.commercial.claims], ["Minimum insurance levels", "minInsurance", t.commercial.minInsurance], ["Service credits / penalties", "serviceCredits", t.commercial.serviceCredits]]);
+    else if (sec === "technology") body.innerHTML = sectionForm("Technology requirements", "technology", [["Tracking / visibility tools", "tracking", t.technology.tracking], ["EDI / API integration", "ediApi", t.technology.ediApi], ["Proof-of-delivery (POD) spec", "pod", t.technology.pod]]);
+    else if (sec === "contract") body.innerHTML = sectionForm("Contract expectations", "contract", [["Duration", "duration", t.contract.duration], ["Start date", "startDate", t.contract.startDate], ["Accessorial charges (waiting, tail-lift…)", "accessorials", t.contract.accessorials], ["Dispute rules", "disputeRules", t.contract.disputeRules]]);
+    else if (sec === "bids") body.innerHTML = bidsHtml(t);
+  }
+  function bindTenderWorkspace() {
+    el("twBack").addEventListener("click", function () { gotoView("active-tenders"); });
+    el("twDelete").addEventListener("click", function () {
+      var t = getTender(currentTenderId); if (!t) return;
       if (!confirm("Delete this tender? This cannot be undone.")) return;
       state.tenders = state.tenders.filter(function (x) { return x.id !== t.id; });
-      closeCtx(); if (currentView === "active-tenders") renderActiveTenders(); markDirty();
+      markDirty(); gotoView("active-tenders");
     });
-  }
-  function refreshBids(t) {
-    el("ctxBids").innerHTML = (t.bids || []).map(bidRowHtml).join("") || '<div style="color:var(--text-3);font-size:12px">No bids recorded.</div>';
-    if (currentView === "active-tenders") renderActiveTenders();
+    el("twStatus").addEventListener("change", function () {
+      var t = getTender(currentTenderId); if (!t) return;
+      t.status = this.value; touchTender(t); renderTender(); markDirty();
+    });
+    el("twTabs").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-sec]"); if (!b) return;
+      currentSection = b.dataset.sec;
+      el("twTabs").querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      renderSection();
+    });
+    var body = el("twBody");
+    function onEdit(e) {
+      var t = getTender(currentTenderId); if (!t) return; var x = e.target;
+      if (x.dataset.tf != null) { t[x.dataset.tf] = x.value; touchTender(t); markDirty(); }
+      else if (x.dataset.ts != null) { var p = x.dataset.ts.split("."); t[p[0]] = t[p[0]] || {}; t[p[0]][p[1]] = x.value; touchTender(t); markDirty(); }
+      else if (x.dataset.ln != null) {
+        var l = t.lanes.find(function (y) { return y.id === x.dataset.ln; });
+        if (l) { l[x.dataset.lf] = x.value; recalcOpLaneRow(t, l); syncTenderValue(t); renderTenderKpis(t); markDirty(); }
+      } else if (x.dataset.vol != null) {
+        var v = t.volumeHistory[x.dataset.vol]; if (v) { v[x.dataset.vf] = x.value; renderVolBars(t); markDirty(); }
+      } else if (x.dataset.bf != null) {
+        var row = x.closest("[data-bid]"); var b = t.bids.find(function (y) { return y.id === row.dataset.bid; });
+        if (b) { b[x.dataset.bf] = x.value; markDirty(); }
+      }
+    }
+    body.addEventListener("input", onEdit);
+    body.addEventListener("change", onEdit);
+    body.addEventListener("click", function (e) {
+      var t = getTender(currentTenderId); if (!t) return;
+      if (e.target.closest("[data-addlane]")) { t.lanes.push(Seed.newOpLane({})); syncTenderValue(t); touchTender(t); renderSection(); renderTenderKpis(t); markDirty(); return; }
+      if (e.target.closest("[data-import]")) { openImport(); return; }
+      var ld = e.target.closest("[data-lanedel]");
+      if (ld) { t.lanes = t.lanes.filter(function (y) { return y.id !== ld.dataset.lanedel; }); syncTenderValue(t); renderSection(); renderTenderKpis(t); markDirty(); return; }
+      if (e.target.closest("[data-addbid]")) { t.bids.push(Seed.newBid({})); renderSection(); markDirty(); return; }
+      var row = e.target.closest("[data-bid]");
+      if (row) {
+        var b = t.bids.find(function (y) { return y.id === row.dataset.bid; }); if (!b) return;
+        if (e.target.closest("[data-bidremove]")) { t.bids = t.bids.filter(function (y) { return y.id !== b.id; }); renderSection(); markDirty(); }
+        else if (e.target.closest("[data-bidaward]")) {
+          t.bids.forEach(function (y) { y.status = y.id === b.id ? "Awarded" : (y.status === "Awarded" ? "Pending" : y.status); });
+          t.status = "Won"; touchTender(t); renderTender(); markDirty(); toast("Bid awarded — tender marked Won.");
+        }
+      }
+    });
   }
 
   // ---- route map (Leaflet via CDN, geocode via Nominatim) -----------------
-  var leafletPromise = null, geoCache = {}, mapTimer = null;
+  var leafletPromise = null, geoCache = {};
   function ensureLeaflet() {
     if (window.L) return Promise.resolve(window.L);
     if (leafletPromise) return leafletPromise;
@@ -408,36 +540,122 @@
   }
   function geocode(q) {
     if (!q) return Promise.resolve(null);
-    if (geoCache[q]) return Promise.resolve(geoCache[q]);
+    if (geoCache[q] !== undefined) return Promise.resolve(geoCache[q]);
     var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=" + encodeURIComponent(q);
     return fetch(url, { headers: { "Accept": "application/json" } }).then(function (r) { return r.json(); })
       .then(function (j) { var hit = j && j[0] ? [parseFloat(j[0].lat), parseFloat(j[0].lon)] : null; geoCache[q] = hit; return hit; })
       .catch(function () { return null; });
   }
-  function mapFallback(msg) {
-    var m = el("ctxMap"); if (m) m.innerHTML = '<div class="map-fallback"><svg viewBox="0 0 24 24" class="ico" style="width:22px;height:22px"><path d="M9 20l-5 2V6l5-2 6 2 5-2v16l-5 2-6-2zM9 4v16M15 6v16"/></svg>' + msg + "</div>";
-  }
-  function scheduleMap(t) { clearTimeout(mapTimer); mapTimer = setTimeout(function () { if (selectedId === t.id) renderMap(t); }, 700); }
-  function renderMap(t) {
-    var holder = el("ctxMap"); if (!holder) return;
-    if (!t.origin && !t.destination) { mapFallback("Add an origin and destination to plot the route."); return; }
-    mapFallback("Loading map…");
+  function renderTenderMap(t) {
+    var holder = el("tenderMap"); if (!holder) return;
+    var lanes = (t.lanes || []).filter(function (l) { return (l.collPostcode || l.collSuburb) || (l.delPostcode || l.delSuburb); }).slice(0, 12);
+    if (!lanes.length) { holder.innerHTML = '<div class="map-fallback">Add lanes with postcodes or suburbs to map the network.</div>'; return; }
+    holder.innerHTML = '<div class="map-fallback">Loading map…</div>';
     ensureLeaflet().then(function (L) {
-      return Promise.all([geocode(t.origin), geocode(t.destination)]).then(function (pts) {
-        if (selectedId !== t.id) return;
+      var jobs = [];
+      lanes.forEach(function (l) {
+        jobs.push(geocode(l.collPostcode || l.collSuburb));
+        jobs.push(geocode(l.delPostcode || l.delSuburb));
+      });
+      return Promise.all(jobs).then(function (pts) {
+        if (currentTenderId !== t.id || currentSection !== "overview") return;
         holder.innerHTML = "";
-        var map = L.map(holder, { attributionControl: false, zoomControl: false }).setView([-25, 134], 4);
+        var map = L.map(holder, { attributionControl: false }).setView([-25, 134], 4);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
-        var marks = [];
-        if (pts[0]) { L.marker(pts[0]).addTo(map).bindTooltip(t.origin); marks.push(pts[0]); }
-        if (pts[1]) { L.marker(pts[1]).addTo(map).bindTooltip(t.destination); marks.push(pts[1]); }
-        if (pts[0] && pts[1]) L.polyline([pts[0], pts[1]], { color: "#2563EB", weight: 3 }).addTo(map);
-        if (marks.length === 2) map.fitBounds(marks, { padding: [30, 30] });
-        else if (marks.length === 1) map.setView(marks[0], 9);
-        else mapFallback("Couldn't locate those places. Check the spelling.");
+        var all = [];
+        for (var i = 0; i < lanes.length; i++) {
+          var a = pts[i * 2], b = pts[i * 2 + 1];
+          if (a) { L.circleMarker(a, { radius: 5, color: "#2563EB", fillOpacity: .9 }).addTo(map); all.push(a); }
+          if (b) { L.circleMarker(b, { radius: 5, color: "#059669", fillOpacity: .9 }).addTo(map); all.push(b); }
+          if (a && b) L.polyline([a, b], { color: "#2563EB", weight: 2, opacity: .55 }).addTo(map);
+        }
+        if (all.length) map.fitBounds(all, { padding: [30, 30], maxZoom: 11 });
+        else holder.innerHTML = '<div class="map-fallback">Couldn\'t locate those places.</div>';
         setTimeout(function () { map.invalidateSize(); }, 60);
       });
-    }).catch(function () { mapFallback("Map needs an internet connection — unavailable offline."); });
+    }).catch(function () { holder.innerHTML = '<div class="map-fallback">Map needs an internet connection — unavailable offline.</div>'; });
+  }
+
+  // ---- EXCEL IMPORT (flexible column mapping) ------------------------------
+  var importData = null;  // { sheets:[{name,headers,rows}] }
+  var IMPORT_FIELDS = [
+    ["collPostcode", "Collection postcode", ["coll", "pickup", "origin", "from"]],
+    ["collSuburb", "Collection suburb/town", ["coll", "pickup", "origin", "suburb", "town"]],
+    ["delPostcode", "Delivery postcode", ["del", "drop", "dest", "to"]],
+    ["delSuburb", "Delivery suburb/town", ["del", "drop", "dest", "suburb", "town"]],
+    ["pallets", "Pallets", ["pallet", "qty", "units", "spaces"]],
+    ["weightKg", "Weight (kg)", ["weight", "kg", "mass"]],
+    ["dims", "Dimensions", ["dim", "size", "lwh"]],
+    ["stackable", "Stackable", ["stack"]],
+    ["loadingType", "Loading type", ["load", "handling"]],
+    ["vehicle", "Vehicle", ["vehicle", "truck", "equip"]],
+    ["freq", "Frequency / week", ["freq", "trips", "loads", "per week", "/wk", "shipments"]],
+    ["hrs", "Hours / trip", ["hours", "hrs", "time"]],
+    ["km", "Km / trip", ["km", "distance", "kms"]]
+  ];
+  function guessColumn(headers, keys) {
+    for (var i = 0; i < headers.length; i++) {
+      var h = String(headers[i]).toLowerCase();
+      for (var k = 0; k < keys.length; k++) if (h.indexOf(keys[k]) >= 0) return i;
+    }
+    return -1;
+  }
+  function openImport() {
+    importData = null;
+    el("importModal").hidden = false;
+    el("importStep1").hidden = false; el("importStep2").hidden = true;
+    el("importBack").hidden = true; el("importDo").hidden = true;
+    el("importFile").value = ""; el("importStatus").textContent = "";
+  }
+  function closeImport() { el("importModal").hidden = true; }
+  function renderImportMapping() {
+    var sheet = importData.sheets[parseInt(el("importSheet").value, 10)] || importData.sheets[0];
+    el("importRowInfo").textContent = "(" + sheet.rowCount + " data rows)";
+    var colOpts = '<option value="-1">—</option>' + sheet.headers.map(function (h, i) { return '<option value="' + i + '">' + esc(h) + "</option>"; }).join("");
+    el("importMap").innerHTML = IMPORT_FIELDS.map(function (f) {
+      var guess = guessColumn(sheet.headers, f[2]);
+      var opts = colOpts.replace('value="' + guess + '"', 'value="' + guess + '" selected');
+      return '<label>' + f[1] + '<select data-imp="' + f[0] + '">' + opts + "</select></label>";
+    }).join("");
+  }
+  function bindImport() {
+    el("importClose").addEventListener("click", closeImport);
+    el("importModal").addEventListener("click", function (e) { if (e.target === el("importModal")) closeImport(); });
+    el("importBack").addEventListener("click", function () {
+      el("importStep1").hidden = false; el("importStep2").hidden = true; el("importBack").hidden = true; el("importDo").hidden = true;
+    });
+    el("importFile").addEventListener("change", function () {
+      var file = this.files[0]; if (!file) return;
+      el("importStatus").textContent = "Reading " + file.name + "…";
+      var fd = new FormData(); fd.append("file", file);
+      fetch("/api/import/excel", { method: "POST", body: fd }).then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) { el("importStatus").textContent = res.error || "Could not read the file."; return; }
+          importData = res;
+          el("importSheet").innerHTML = res.sheets.map(function (s, i) { return '<option value="' + i + '">' + esc(s.name) + " (" + s.rowCount + " rows)</option>"; }).join("");
+          el("importStep1").hidden = true; el("importStep2").hidden = false;
+          el("importBack").hidden = false; el("importDo").hidden = false;
+          renderImportMapping();
+        }).catch(function (e) { el("importStatus").textContent = "Import failed: " + e; });
+    });
+    el("importSheet").addEventListener("change", renderImportMapping);
+    el("importDo").addEventListener("click", function () {
+      var t = getTender(currentTenderId); if (!t || !importData) return;
+      var sheet = importData.sheets[parseInt(el("importSheet").value, 10)];
+      var map = {};
+      el("importMap").querySelectorAll("[data-imp]").forEach(function (sel) { map[sel.dataset.imp] = parseInt(sel.value, 10); });
+      var added = 0;
+      sheet.rows.forEach(function (row) {
+        var seed = {};
+        IMPORT_FIELDS.forEach(function (f) { var ci = map[f[0]]; if (ci >= 0) seed[f[0]] = row[ci]; });
+        if (seed.stackable != null) { var sv = String(seed.stackable).toLowerCase(); seed.stackable = (sv.indexOf("n") === 0 || sv === "false" || sv === "0") ? "N" : "Y"; }
+        // skip fully-empty rows
+        if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) { t.lanes.push(Seed.newOpLane(seed)); added++; }
+      });
+      syncTenderValue(t); touchTender(t); save();
+      closeImport(); currentSection = "lanes"; renderTender();
+      toast("Imported " + added + " lane" + (added === 1 ? "" : "s") + ".");
+    });
   }
 
   // ---- BID ANALYSIS --------------------------------------------------------
@@ -578,7 +796,7 @@
     state.tenders.forEach(function (t) {
       var label = (t.reference || t.customer || "Tender");
       if (!q || (t.reference + " " + t.customer + " " + (t.title || "")).toLowerCase().indexOf(q) >= 0)
-        items.push({ group: "Tenders", label: label, meta: t.customer || "", run: function () { gotoView("active-tenders"); openCtx(t.id); } });
+        items.push({ group: "Tenders", label: label, meta: t.customer || "", run: function () { openTender(t.id); } });
     });
     [["Create new tender", function () { el("btnNewTender").click(); }],
      ["Export full model → Excel", function () { doExport("excel-full"); }],
@@ -874,7 +1092,8 @@
   load().then(function () {
     setupNav(); setupCmdk();
     bindSettings(); bindLanes(); bindWarehousing(); bindLegBuilder(); bindQuote();
-    bindActiveTenders(); bindCarriers(); bindCompliance(); bindReports(); bindExport(); bindReset();
+    bindActiveTenders(); bindTenderWorkspace(); bindImport();
+    bindCarriers(); bindCompliance(); bindReports(); bindExport(); bindReset();
     gotoView("active-tenders");
   });
 })();

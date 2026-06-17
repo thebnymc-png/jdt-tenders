@@ -364,12 +364,60 @@
         <div class="report-grid" id="reportGrid"></div>
       </section>
 
+      <!-- TENDER WORKSPACE (full RFQ) ------------------------------------- -->
+      <section class="view" id="view-tender">
+        <div class="tw-head">
+          <button class="btn btn-ghost" id="twBack">← Tenders</button>
+          <div class="tw-title"><div class="ref" id="twRef"></div><h1 id="twCustomer"></h1></div>
+          <span id="twStatusBadge"></span>
+          <div class="tw-head-actions">
+            <select id="twStatus" class="field" style="min-width:140px"></select>
+            <button class="btn" id="twDelete">Delete</button>
+          </div>
+        </div>
+        <div id="twKpis" class="stat-strip"></div>
+        <div class="tw-tabs" id="twTabs">
+          <button data-sec="overview" class="on">Overview</button>
+          <button data-sec="lanes">Operational Lanes</button>
+          <button data-sec="volume">Volume History</button>
+          <button data-sec="schedule">Schedule</button>
+          <button data-sec="commercial">Commercial</button>
+          <button data-sec="technology">Technology</button>
+          <button data-sec="contract">Contract</button>
+          <button data-sec="bids">Bids</button>
+        </div>
+        <div id="twBody"></div>
+      </section>
+
     </div>
   </div>
 
   <!-- CONTEXTUAL DETAIL PANEL ============================================ -->
   <aside id="ctx" class="ctx" aria-hidden="true"></aside>
   <div id="ctxScrim" class="scrim" hidden></div>
+
+  <!-- EXCEL IMPORT MODAL ================================================= -->
+  <div id="importModal" class="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-head"><h3>Import lanes from Excel</h3><button class="icon-btn" id="importClose"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div class="modal-body">
+        <div id="importStep1">
+          <p class="sub">Upload a supplier tender workbook (.xlsx). You'll map its columns to JDT lane fields next — any layout works.</p>
+          <input type="file" id="importFile" accept=".xlsx,.xlsm,.xls" style="margin-top:8px">
+          <div id="importStatus" class="import-status"></div>
+        </div>
+        <div id="importStep2" hidden>
+          <label class="imp-sheet">Sheet <select id="importSheet"></select></label>
+          <p class="sub">Map each JDT field to a column, or leave “—”. <span id="importRowInfo"></span></p>
+          <div id="importMap" class="import-map"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="importBack" hidden>← Back</button>
+        <button class="btn btn-primary" id="importDo" hidden>Import lanes</button>
+      </div>
+    </div>
+  </div>
 
   <!-- COMMAND PALETTE ==================================================== -->
   <div id="cmdk" class="cmdk" hidden>

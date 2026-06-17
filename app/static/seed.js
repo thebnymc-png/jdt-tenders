@@ -73,9 +73,31 @@
   var TENDER_STATUSES = ["Draft", "Submitted", "Shortlisted", "Won", "Lost", "No-bid"];
   var BID_STATUSES = ["Pending", "Awarded", "Rejected"];
   var COMPLIANCE_STATUSES = ["Compliant", "Due", "Overdue", "N/A"];
+  var LOADING_TYPES = ["Tail-lift", "Dock / Ramp", "Forklift", "Hand unload", "Crane", "Side-loader"];
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   function uid(prefix) {
     return (prefix || "id") + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  }
+
+  function defaultVolume() {
+    return MONTHS.map(function (m) { return { month: m, shipments: "", pallets: "" }; });
+  }
+
+  // An operational lane within a tender RFQ: operational descriptors + the
+  // inputs the cost engine needs to price it.
+  function newOpLane(seed) {
+    seed = seed || {};
+    function v(k, d) { return seed[k] != null ? seed[k] : (d == null ? "" : d); }
+    return {
+      id: uid("l"),
+      collPostcode: v("collPostcode"), collSuburb: v("collSuburb"),
+      delPostcode: v("delPostcode"), delSuburb: v("delSuburb"),
+      pallets: v("pallets"), weightKg: v("weightKg"), dims: v("dims"),
+      stackable: v("stackable", "Y"), loadingType: v("loadingType", "Tail-lift"),
+      vehicle: v("vehicle", "Rigid"), freq: v("freq"),
+      hrs: v("hrs"), km: v("km"), tolls: v("tolls"), overnight: v("overnight"), loadExtras: v("loadExtras")
+    };
   }
 
   function newTender(seed) {
@@ -85,9 +107,6 @@
       reference: seed.reference || "",
       customer: seed.customer || "",
       title: seed.title || "",
-      origin: seed.origin || "",
-      destination: seed.destination || "",
-      volume: seed.volume != null ? seed.volume : "",
       status: seed.status || "Draft",
       dueDate: seed.dueDate || "",
       submittedDate: seed.submittedDate || "",
@@ -95,6 +114,12 @@
       probability: seed.probability != null ? seed.probability : 50,
       owner: seed.owner || "Jordan Brown",
       notes: seed.notes || "",
+      contract: seed.contract || { duration: "12 months", startDate: "", accessorials: "", disputeRules: "" },
+      schedule: seed.schedule || { collectionWindows: "", deliveryTimeframes: "", weekend: "", bookingRules: "" },
+      commercial: seed.commercial || { fuelSurcharge: "", paymentTerms: "", claims: "", minInsurance: "", serviceCredits: "" },
+      technology: seed.technology || { tracking: "", ediApi: "", pod: "" },
+      lanes: Array.isArray(seed.lanes) ? seed.lanes : [],
+      volumeHistory: Array.isArray(seed.volumeHistory) ? seed.volumeHistory : defaultVolume(),
       bids: Array.isArray(seed.bids) ? seed.bids : [],
       snapshot: seed.snapshot || null,
       updatedAt: new Date().toISOString().slice(0, 10)
@@ -165,6 +190,8 @@
     defaultQuote: defaultQuote,
     defaultState: defaultState,
     newTender: newTender,
+    newOpLane: newOpLane,
+    defaultVolume: defaultVolume,
     newBid: newBid,
     newCarrier: newCarrier,
     newComplianceItem: newComplianceItem,
@@ -172,6 +199,8 @@
     TENDER_STATUSES: TENDER_STATUSES,
     BID_STATUSES: BID_STATUSES,
     COMPLIANCE_STATUSES: COMPLIANCE_STATUSES,
+    LOADING_TYPES: LOADING_TYPES,
+    MONTHS: MONTHS,
     VEHICLES: ["Ute", "Rigid", "Semi", "Bdouble"]
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

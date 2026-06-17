@@ -224,6 +224,29 @@
     };
   }
 
+  // ---- operational lane pricing (within a tender) --------------------------
+  // Maps a tender's operational lane onto the lane shape the cost engine needs.
+  function priceOpLane(l, s) {
+    return computeLane({
+      origin: l.collPostcode || l.collSuburb, dest: l.delPostcode || l.delSuburb,
+      vehicle: l.vehicle, spaces: l.pallets, trips: l.freq,
+      hrs: l.hrs, km: l.km, tolls: l.tolls, overnight: l.overnight, loadExtras: l.loadExtras
+    }, s);
+  }
+  function computeTender(t, s) {
+    var wr = 0, wc = 0, go = 0, review = 0, nogo = 0, pallets = 0;
+    (t.lanes || []).forEach(function (l) {
+      var r = priceOpLane(l, s), freq = num(l.freq);
+      wr += r.priceFL * freq; wc += r.cost * freq; pallets += num(l.pallets) * freq;
+      if (r.decision === "GO") go++; else if (r.decision === "REVIEW") review++; else if (r.decision === "NO-GO") nogo++;
+    });
+    return {
+      weeklyRev: wr, weeklyCost: wc, weeklyGP: wr - wc, annualRev: wr * 52, annualGP: (wr - wc) * 52,
+      margin: wr > 0 ? (wr - wc) / wr : 0, laneCount: (t.lanes || []).length,
+      go: go, review: review, nogo: nogo, totalPalletsWk: pallets
+    };
+  }
+
   // ---- tender pipeline -----------------------------------------------------
   var OPEN_STATUSES = { "Draft": 1, "Submitted": 1, "Shortlisted": 1 };
 
@@ -277,7 +300,8 @@
     computeLane: computeLane, computeWarehouse: computeWarehouse,
     computeLegs: computeLegs, computeSummary: computeSummary,
     buildQuote: buildQuote,
-    computePipeline: computePipeline, tenderDueState: tenderDueState, daysUntil: daysUntil
+    computePipeline: computePipeline, tenderDueState: tenderDueState, daysUntil: daysUntil,
+    priceOpLane: priceOpLane, computeTender: computeTender
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
