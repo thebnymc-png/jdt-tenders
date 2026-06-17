@@ -693,7 +693,8 @@
       '<td class="calc">' + (r.decision ? fmtPct(r.margin) : "—") + "</td><td class=\"calc\">" + fmtMoney2(r.perPallet) + "</td>" +
       '<td class="calc">' + fmtMoney(r.annualRev) + "</td><td class=\"calc\">" + fmtMoney(r.annualGP) + "</td>" +
       '<td class="calc cell-dec dec-' + (r.decision || "") + '">' + (r.decision || "—") + "</td>" +
-      '<td><input class="qflag" data-acc="' + idx + '" data-f="quote" value="' + esc(acc.quote) + '" maxlength="1"></td></tr>';
+      '<td><input class="qflag" data-acc="' + idx + '" data-f="quote" value="' + esc(acc.quote) + '" maxlength="1"></td>' +
+      '<td><button class="rowdel" data-accdel="' + idx + '" title="Delete account">×</button></td></tr>';
   }
   function renderWarehousing() {
     document.querySelectorAll("[data-wh]").forEach(function (inp) { inp.value = state.warehousing[inp.dataset.wh]; });
@@ -717,6 +718,13 @@
       var idx = e.target.dataset.acc; if (idx == null) return;
       state.accounts[idx][e.target.dataset.f] = e.target.value; recalcWhRow(parseInt(idx, 10)); markDirty();
     });
+    el("whBody").addEventListener("click", function (e) {
+      var d = e.target.closest("[data-accdel]"); if (!d) return;
+      state.accounts.splice(parseInt(d.dataset.accdel, 10), 1); renderWarehousing(); markDirty();
+    });
+    el("btnAddAccount").addEventListener("click", function () {
+      state.accounts.push(Seed.emptyAccount("")); renderWarehousing(); markDirty();
+    });
   }
   function renderLegBuilder() {
     var lb = state.legBuilder;
@@ -726,7 +734,8 @@
         '<td class="txt"><input class="txt" data-leg="' + i + '" data-f="label" value="' + esc(leg.label) + '"></td>' +
         '<td class="txt"><input class="txt" data-leg="' + i + '" data-f="type" value="' + esc(leg.type) + '"></td>' +
         '<td><input data-leg="' + i + '" data-f="hours" value="' + esc(leg.hours) + '" inputmode="decimal"></td>' +
-        '<td><input data-leg="' + i + '" data-f="km" value="' + esc(leg.km) + '" inputmode="decimal"></td></tr>';
+        '<td><input data-leg="' + i + '" data-f="km" value="' + esc(leg.km) + '" inputmode="decimal"></td>' +
+        '<td><button class="rowdel" data-legdel="' + i + '" title="Remove leg">×</button></td></tr>';
     }).join("");
     recalcLegPreview();
   }
@@ -752,6 +761,13 @@
     el("legBody").addEventListener("input", function (e) {
       var i = e.target.dataset.leg; if (i == null) return;
       state.legBuilder.legs[i][e.target.dataset.f] = e.target.value; recalcLegPreview(); markDirty();
+    });
+    el("legBody").addEventListener("click", function (e) {
+      var d = e.target.closest("[data-legdel]"); if (!d) return;
+      state.legBuilder.legs.splice(parseInt(d.dataset.legdel, 10), 1); renderLegBuilder(); markDirty();
+    });
+    el("btnAddLeg").addEventListener("click", function () {
+      state.legBuilder.legs.push({ label: "", type: "drive", hours: 0, km: 0 }); renderLegBuilder(); markDirty();
     });
   }
   function dl(rows) { return rows.map(function (r) { return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>"; }).join(""); }

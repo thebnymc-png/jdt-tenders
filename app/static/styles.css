@@ -241,9 +241,31 @@ table.grid tfoot th{background:var(--surface-2);position:sticky;bottom:0}
 tr.row-GO td.calc{background:var(--go-bg)}
 tr.row-REVIEW td.calc{background:var(--review-bg)}
 tr.row-NO-GO td.calc{background:var(--nogo-bg)}
-.qflag{width:46px!important;text-align:center!important;text-transform:uppercase}
-.rowdel{border:0;background:transparent;color:var(--nogo);cursor:pointer;font-size:15px;padding:0 4px}
+.qflag{text-align:center!important;text-transform:uppercase}
+.rowdel{border:0;background:transparent;color:var(--text-3);cursor:pointer;font-size:15px;padding:0 4px}
+.rowdel:hover{color:var(--nogo)}
 .empty{color:var(--text-3);font-style:italic;padding:10px}
+
+/* pricing grids (lanes/warehousing/leg) — filled-cell inputs, aligned columns */
+table.pgrid{border-collapse:collapse;width:100%;min-width:100%;table-layout:fixed;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.pgrid th{height:36px;padding:0 10px;background:var(--surface);color:var(--text-2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;text-align:right;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.pgrid th.l{text-align:left}
+table.pgrid td{height:36px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);text-align:right;padding:0;overflow:hidden}
+table.pgrid td:last-child{border-right:0}
+table.pgrid td.calc{padding:0 10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.pgrid td.txt{text-align:left}
+table.pgrid input,table.pgrid select{width:100%;height:35px;border:0;background:var(--input-bg);color:var(--text);padding:0 9px;text-align:right;font-family:inherit;font-size:12.5px;font-variant-numeric:tabular-nums;border-radius:0}
+table.pgrid td.txt input,table.pgrid select{text-align:left}
+table.pgrid select{cursor:pointer}
+table.pgrid input:focus,table.pgrid select:focus{outline:2px solid var(--primary);outline-offset:-2px;background:var(--bg)}
+table.pgrid tbody tr:hover td.calc{background:var(--surface)}
+table.pgrid .rowdel{width:100%;height:35px;padding:0}
+table.pgrid .rowdel:hover{background:var(--nogo-bg)}
+table.pgrid tfoot th{background:var(--surface-2);position:sticky;bottom:0;text-align:right;border-top:1px solid var(--border)}
+table.pgrid tfoot th.l{text-align:left}
+#lanesTable{min-width:1700px}
+#whTable{min-width:1440px}
+#legTable{min-width:100%}
 
 /* leg builder ------------------------------------------------------------ */
 .leg-layout{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
