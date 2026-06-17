@@ -285,10 +285,7 @@
       captureInto(t); state.tenders.unshift(t); save(); openTender(t.id);
       toast("Captured current model as a new tender.");
     });
-    el("btnNewTender").addEventListener("click", function () {
-      var t = Seed.newTender({ customer: state.quote.customer || "", reference: state.quote.quoteNumber || "" });
-      state.tenders.unshift(t); markDirty(); openTender(t.id);
-    });
+    el("btnNewTender").addEventListener("click", function () { openImport("new"); });
   }
   function setTenderStatus(id, status) {
     var t = getTender(id); if (!t) return;
@@ -604,12 +601,26 @@
     }
     return -1;
   }
-  function openImport() {
+  // mode "new"  -> Create New Tender (chooser, then build a tender from Excel)
+  // mode "lanes" -> add lanes to the open tender (from the workspace)
+  var importMode = "lanes";
+  function showImportStep(step) {  // "choose" | "file" | "map"
+    el("importChoose").hidden = step !== "choose";
+    el("importStep1").hidden = step !== "file";
+    el("importStep2").hidden = step !== "map";
+    el("importDetails").hidden = !(step === "map" && importMode === "new");
+    el("importBack").hidden = !(step === "file" && importMode === "new") && step !== "map";
+    el("importDo").hidden = step !== "map";
+  }
+  function openImport(mode) {
+    importMode = mode || "lanes";
     importData = null;
     el("importModal").hidden = false;
-    el("importStep1").hidden = false; el("importStep2").hidden = true;
-    el("importBack").hidden = true; el("importDo").hidden = true;
+    el("importTitle").textContent = importMode === "new" ? "Create a tender" : "Import lanes from Excel";
+    el("importDo").textContent = importMode === "new" ? "Create tender" : "Import lanes";
     el("importFile").value = ""; el("importStatus").textContent = "";
+    ["impCustomer", "impReference", "impTitle", "impDue", "impOwner"].forEach(function (id) { el(id).value = ""; });
+    showImportStep(importMode === "new" ? "choose" : "file");
   }
   function closeImport() { el("importModal").hidden = true; }
   function renderImportMapping() {
@@ -624,12 +635,32 @@
       return '<label>' + f[1] + '<select data-imp="' + f[0] + '">' + opts + "</select></label>";
     }).join("");
   }
+  // Build operational lanes from the mapped sheet; returns the lane array.
+  function lanesFromMapping() {
+    var sheet = importData.sheets[parseInt(el("importSheet").value, 10)];
+    var map = {};
+    el("importMap").querySelectorAll("[data-imp]").forEach(function (sel) { map[sel.dataset.imp] = parseInt(sel.value, 10); });
+    var lanes = [];
+    sheet.rows.forEach(function (row) {
+      var seed = {};
+      IMPORT_FIELDS.forEach(function (f) { var ci = map[f[0]]; if (ci >= 0) seed[f[0]] = row[ci]; });
+      if (seed.stackable != null) { var sv = String(seed.stackable).toLowerCase(); seed.stackable = (sv.indexOf("n") === 0 || sv === "false" || sv === "0") ? "N" : "Y"; }
+      if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) lanes.push(Seed.newOpLane(seed));
+    });
+    return lanes;
+  }
   function bindImport() {
     el("importClose").addEventListener("click", closeImport);
     el("importTemplate").addEventListener("click", function () { doExport("import-template"); });
     el("importModal").addEventListener("click", function (e) { if (e.target === el("importModal")) closeImport(); });
+    el("chooseBlank").addEventListener("click", function () {
+      var t = Seed.newTender({ customer: state.quote.customer || "", reference: state.quote.quoteNumber || "" });
+      state.tenders.unshift(t); markDirty(); closeImport(); openTender(t.id);
+    });
+    el("chooseImport").addEventListener("click", function () { showImportStep("file"); });
     el("importBack").addEventListener("click", function () {
-      el("importStep1").hidden = false; el("importStep2").hidden = true; el("importBack").hidden = true; el("importDo").hidden = true;
+      if (!el("importStep2").hidden) showImportStep("file");
+      else if (importMode === "new") showImportStep("choose");
     });
     el("importFile").addEventListener("change", function () {
       var file = this.files[0]; if (!file) return;
@@ -640,28 +671,29 @@
           if (!res.ok) { el("importStatus").textContent = res.error || "Could not read the file."; return; }
           importData = res;
           el("importSheet").innerHTML = res.sheets.map(function (s, i) { return '<option value="' + i + '">' + esc(s.name) + " (" + s.rowCount + " rows)</option>"; }).join("");
-          el("importStep1").hidden = true; el("importStep2").hidden = false;
-          el("importBack").hidden = false; el("importDo").hidden = false;
           renderImportMapping();
+          showImportStep("map");
         }).catch(function (e) { el("importStatus").textContent = "Import failed: " + e; });
     });
     el("importSheet").addEventListener("change", renderImportMapping);
     el("importDo").addEventListener("click", function () {
-      var t = getTender(currentTenderId); if (!t || !importData) return;
-      var sheet = importData.sheets[parseInt(el("importSheet").value, 10)];
-      var map = {};
-      el("importMap").querySelectorAll("[data-imp]").forEach(function (sel) { map[sel.dataset.imp] = parseInt(sel.value, 10); });
-      var added = 0;
-      sheet.rows.forEach(function (row) {
-        var seed = {};
-        IMPORT_FIELDS.forEach(function (f) { var ci = map[f[0]]; if (ci >= 0) seed[f[0]] = row[ci]; });
-        if (seed.stackable != null) { var sv = String(seed.stackable).toLowerCase(); seed.stackable = (sv.indexOf("n") === 0 || sv === "false" || sv === "0") ? "N" : "Y"; }
-        // skip fully-empty rows
-        if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) { t.lanes.push(Seed.newOpLane(seed)); added++; }
-      });
-      syncTenderValue(t); touchTender(t); save();
-      closeImport(); currentSection = "lanes"; renderTender();
-      toast("Imported " + added + " lane" + (added === 1 ? "" : "s") + ".");
+      if (!importData) return;
+      var lanes = lanesFromMapping();
+      if (importMode === "new") {
+        var t = Seed.newTender({
+          customer: el("impCustomer").value, reference: el("impReference").value, title: el("impTitle").value,
+          dueDate: el("impDue").value, owner: el("impOwner").value || undefined
+        });
+        t.lanes = lanes; syncTenderValue(t); touchTender(t);
+        state.tenders.unshift(t); save(); closeImport(); openTender(t.id);
+        toast("Created tender with " + lanes.length + " lane" + (lanes.length === 1 ? "" : "s") + ".");
+      } else {
+        var cur = getTender(currentTenderId); if (!cur) return;
+        lanes.forEach(function (l) { cur.lanes.push(l); });
+        syncTenderValue(cur); touchTender(cur); save();
+        closeImport(); currentSection = "lanes"; renderTender();
+        toast("Imported " + lanes.length + " lane" + (lanes.length === 1 ? "" : "s") + ".");
+      }
     });
   }
 

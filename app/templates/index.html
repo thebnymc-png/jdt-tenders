@@ -399,10 +399,17 @@
   <!-- EXCEL IMPORT MODAL ================================================= -->
   <div id="importModal" class="modal" hidden>
     <div class="modal-box">
-      <div class="modal-head"><h3>Import lanes from Excel</h3><button class="icon-btn" id="importClose"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div class="modal-head"><h3 id="importTitle">Import</h3><button class="icon-btn" id="importClose"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="modal-body">
-        <div id="importStep1">
-          <p class="sub">Upload a supplier tender workbook (.xlsx). You'll map its columns to JDT lane fields next — any layout works.</p>
+        <div id="importChoose" hidden>
+          <p class="sub">Start a new tender from scratch, or import a customer's Excel and map their data into it.</p>
+          <div class="choose-grid">
+            <button class="choose-card" id="chooseBlank"><div class="cc-ico">+</div><h4>Blank tender</h4><p>Start empty and fill it in the workspace.</p></button>
+            <button class="choose-card" id="chooseImport"><div class="cc-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg></div><h4>Import from Excel</h4><p>Upload a workbook and map columns 1:1.</p></button>
+          </div>
+        </div>
+        <div id="importStep1" hidden>
+          <p class="sub">Upload a supplier tender workbook (.xlsx). You'll map its columns to JDT fields next — any layout works.</p>
           <input type="file" id="importFile" accept=".xlsx,.xlsm,.xls" style="margin-top:8px">
           <div id="importStatus" class="import-status"></div>
           <div class="import-tpl">
@@ -411,6 +418,17 @@
           </div>
         </div>
         <div id="importStep2" hidden>
+          <div id="importDetails" hidden>
+            <h4 class="imp-h">Tender details</h4>
+            <div class="import-map">
+              <label>Customer<input id="impCustomer" placeholder="Customer name"></label>
+              <label>Reference / RFQ #<input id="impReference" placeholder="e.g. RFQ-2026-014"></label>
+              <label>Title<input id="impTitle" placeholder="Optional"></label>
+              <label>Deadline<input id="impDue" type="date"></label>
+              <label>Owner<input id="impOwner" placeholder="Optional"></label>
+            </div>
+          </div>
+          <h4 class="imp-h">Lane columns</h4>
           <label class="imp-sheet">Sheet <select id="importSheet"></select></label>
           <p class="sub">Map each JDT field to a column, or leave “—”. <span id="importRowInfo"></span></p>
           <div id="importMap" class="import-map"></div>
@@ -418,7 +436,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn" id="importBack" hidden>← Back</button>
-        <button class="btn btn-primary" id="importDo" hidden>Import lanes</button>
+        <button class="btn btn-primary" id="importDo" hidden>Import</button>
       </div>
     </div>
   </div>
