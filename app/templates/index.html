@@ -259,22 +259,29 @@
 
       <!-- LEG BUILDER ----------------------------------------------------- -->
       <section class="view" id="view-legbuilder">
-        <div class="view-head"><div><h1>Leg Builder</h1><p class="sub">Break a trip into legs of hours + km. Totals feed the live preview.</p></div></div>
-        <div class="leg-layout">
-          <div>
-            <div class="settings-grid compact">
-              <div class="setbox">
-                <h3>Trip</h3>
-                <label>Vehicle class
-                  <select data-lb="vehicle"><option>Ute</option><option>Rigid</option><option>Semi</option><option>Bdouble</option></select>
-                </label>
-                <label>Pallet spaces<input type="number" step="1" data-lb="spaces"></label>
-                <label>Trips per week<input type="number" step="1" data-lb="trips"></label>
-                <label>Tolls $<input type="number" step="0.01" data-lb="tolls"></label>
-                <label>Overnight $<input type="number" step="0.01" data-lb="overnight"></label>
-                <label>Loading extras $<input type="number" step="0.01" data-lb="loadExtras"></label>
+        <div class="view-head"><div><h1>Leg Builder</h1><p class="sub">Break a complex trip into legs of hours + km — pricing updates live.</p></div></div>
+        <div class="tw-pane">
+          <div class="stat-strip" id="legKpis"></div>
+          <div class="leg-row">
+            <div class="card">
+              <div class="card-h">Trip</div>
+              <div class="field-grid">
+                <label class="f-field"><span class="f-label">Vehicle class</span>
+                  <select data-lb="vehicle"><option>Ute</option><option>Rigid</option><option>Semi</option><option>Bdouble</option></select></label>
+                <label class="f-field"><span class="f-label">Pallet spaces</span><input type="number" step="1" data-lb="spaces"></label>
+                <label class="f-field"><span class="f-label">Trips per week</span><input type="number" step="1" data-lb="trips"></label>
+                <label class="f-field"><span class="f-label">Tolls $</span><input type="number" step="0.01" data-lb="tolls"></label>
+                <label class="f-field"><span class="f-label">Overnight $</span><input type="number" step="0.01" data-lb="overnight"></label>
+                <label class="f-field"><span class="f-label">Loading extras $</span><input type="number" step="0.01" data-lb="loadExtras"></label>
               </div>
             </div>
+            <div class="card">
+              <div class="card-h">Cost breakdown</div>
+              <dl class="kv" id="legBreakdown"></dl>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">Trip legs</div>
             <div class="grid-wrap">
               <table class="pgrid" id="legTable">
                 <colgroup><col style="width:52px"><col style="width:300px"><col style="width:150px"><col style="width:110px"><col style="width:110px"><col style="width:44px"></colgroup>
@@ -283,12 +290,8 @@
                 <tfoot><tr><th class="l" colspan="3">Totals</th><th id="legTotHrs">0</th><th id="legTotKm">0</th><th></th></tr></tfoot>
               </table>
             </div>
-            <button class="btn" id="btnAddLeg" style="margin-top:10px">+ Add leg</button>
+            <button class="btn" id="btnAddLeg" style="margin-top:12px">+ Add leg</button>
           </div>
-          <aside class="preview">
-            <h3>Live preview</h3>
-            <dl id="legPreview"></dl>
-          </aside>
         </div>
       </section>
 

@@ -1038,30 +1038,39 @@
         '<td><input data-leg="' + i + '" data-f="km" value="' + esc(leg.km) + '" inputmode="decimal"></td>' +
         '<td><button class="rowdel" data-legdel="' + i + '" title="Remove leg">×</button></td></tr>';
     }).join("");
-    recalcLegPreview();
+    recalcLeg();
   }
-  function recalcLegPreview() {
-    var r = E.computeLegs(state.legBuilder, state.settings);
+  function recalcLeg() {
+    var r = E.computeLegs(state.legBuilder, state.settings), lb = state.legBuilder;
     el("legTotHrs").textContent = r.totalHours; el("legTotKm").textContent = r.totalKm;
-    var rows = [
-      ["Total hours", r.totalHours], ["Total km", r.totalKm], ["Loaded $/hr", fmtMoney2(r.loaded)], ["Vehicle $/km", fmtMoney2(r.veh)],
-      ["Labour $", fmtMoney2(r.labour)], ["Fuel &amp; vehicle $", fmtMoney2(r.fuelVeh)], ["Extras $", fmtMoney2(r.extras)], ["Cost / trip", fmtMoney2(r.cost)],
-      ["Base price (excl FL)", fmtMoney2(r.base)], ["Price + fuel levy", fmtMoney2(r.priceFL)], ["Margin %", fmtPct(r.margin)],
-      ["Per pallet space", fmtMoney2(r.perSpace)], ["Per hour", fmtMoney2(r.perHour)], ["Annual revenue", fmtMoney(r.annualRev)], ["Annual GP", fmtMoney(r.annualGP)]
-    ];
-    el("legPreview").innerHTML = rows.map(function (x, i) { return "<dt>" + x[0] + "</dt><dd class='" + (i === 9 || i >= 13 ? "big" : "") + "'>" + x[1] + "</dd>"; }).join("");
+    renderStrip("legKpis", [
+      { k: "Price + fuel levy", v: fmtMoney2(r.priceFL), s: "per trip", cls: "good" },
+      { k: "Margin %", v: fmtPct(r.margin), s: "target " + state.settings.targetMarginPct + "%", cls: "good" },
+      { k: "Cost / trip", v: fmtMoney2(r.cost), s: "all-in" },
+      { k: "Base price", v: fmtMoney2(r.base), s: "excl. fuel levy" },
+      { k: "Per pallet space", v: fmtMoney2(r.perSpace), s: E.num(lb.spaces) + " spaces" },
+      { k: "Per hour", v: fmtMoney2(r.perHour), s: r.totalHours + " hrs" },
+      { k: "Annual revenue", v: fmtMoney(r.annualRev), s: E.num(lb.trips) + " trips/wk", cls: "good" },
+      { k: "Annual GP", v: fmtMoney(r.annualGP), s: "gross profit", cls: "good" }
+    ]);
+    el("legBreakdown").innerHTML = [
+      ["Total hours", r.totalHours], ["Total km", r.totalKm],
+      ["Loaded $/hr", fmtMoney2(r.loaded)], ["Vehicle $/km", fmtMoney2(r.veh)],
+      ["Labour $", fmtMoney2(r.labour)], ["Fuel &amp; vehicle $", fmtMoney2(r.fuelVeh)],
+      ["Extras $", fmtMoney2(r.extras)], ["Cost / trip", fmtMoney2(r.cost)]
+    ].map(function (x) { return "<dt>" + x[0] + "</dt><dd>" + x[1] + "</dd>"; }).join("");
   }
   function bindLegBuilder() {
     document.querySelectorAll("[data-lb]").forEach(function (inp) {
       inp.addEventListener("input", function () {
         var v = inp.value;
         state.legBuilder[inp.dataset.lb] = (inp.tagName === "SELECT") ? v : (v === "" ? "" : (isNaN(parseFloat(v)) ? v : parseFloat(v)));
-        recalcLegPreview(); markDirty();
+        recalcLeg(); markDirty();
       });
     });
     el("legBody").addEventListener("input", function (e) {
       var i = e.target.dataset.leg; if (i == null) return;
-      state.legBuilder.legs[i][e.target.dataset.f] = e.target.value; recalcLegPreview(); markDirty();
+      state.legBuilder.legs[i][e.target.dataset.f] = e.target.value; recalcLeg(); markDirty();
     });
     el("legBody").addEventListener("click", function (e) {
       var d = e.target.closest("[data-legdel]"); if (!d) return;
