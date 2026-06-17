@@ -1,260 +1,368 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>JDT Pricing Model</title>
+  <title>JDT — Tender & Pricing Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">JDT</div>
-      <div>
-        <div class="brand-name">JD Refrigerated Transport</div>
-        <div class="brand-sub">Pricing Model &middot; Brisbane, Queensland &middot; CoR-compliant carrier</div>
+<div id="app">
+
+  <!-- SIDEBAR ============================================================ -->
+  <aside id="sidebar">
+    <div class="sb-head">
+      <div class="brand">
+        <div class="logo">JDT</div>
+        <div class="brand-text">
+          <div class="brand-name">JD Refrigerated</div>
+          <div class="brand-sub">Tender Console</div>
+        </div>
       </div>
+      <button class="icon-btn" id="sbCollapse" title="Collapse sidebar" aria-label="Collapse sidebar">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
     </div>
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="instructions">Instructions</button>
-      <button class="tab" data-tab="settings">Settings</button>
-      <button class="tab" data-tab="lanes">Lanes</button>
-      <button class="tab" data-tab="warehousing">Warehousing</button>
-      <button class="tab" data-tab="legbuilder">Leg Builder</button>
-      <button class="tab" data-tab="summary">Summary</button>
-      <button class="tab" data-tab="quote">Quote</button>
-      <button class="tab" data-tab="tenders">Tenders</button>
+
+    <nav class="sb-nav" id="sbNav">
+      <div class="sb-group">Workspace</div>
+      <button class="sb-item" data-view="active-tenders">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Active Tenders</span>
+      </button>
+      <button class="sb-item" data-view="bid-analysis">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M4 19V5M4 19h16M8 16v-5M13 16V8M18 16v-3"/></svg><span>Bid Analysis</span>
+      </button>
+
+      <div class="sb-group">Pricing</div>
+      <button class="sb-item" data-view="settings">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2Z"/></svg><span>Settings</span>
+      </button>
+      <button class="sb-item" data-view="lanes">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M3 16V7h11v9M14 10h4l3 3v3h-7M5.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM17.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg><span>Lanes</span>
+      </button>
+      <button class="sb-item" data-view="warehousing">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M3 9l9-5 9 5v11H3zM7 20v-7h10v7"/></svg><span>Warehousing</span>
+      </button>
+      <button class="sb-item" data-view="legbuilder">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M6 19a3 3 0 1 0 0-6h8a3 3 0 1 0 0-6H6M6 7H4M18 19h2"/></svg><span>Leg Builder</span>
+      </button>
+      <button class="sb-item" data-view="quote">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6"/></svg><span>Quote</span>
+      </button>
+      <button class="sb-item" data-view="summary">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5"/></svg><span>Portfolio</span>
+      </button>
+
+      <div class="sb-group">Network</div>
+      <button class="sb-item" data-view="carrier-network">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 8.5l3 7.5M16 8.5l-3 7.5M8.5 7h7"/></svg><span>Carrier Network</span>
+      </button>
+      <button class="sb-item" data-view="compliance">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6zM9 12l2 2 4-4"/></svg><span>Compliance</span>
+      </button>
+
+      <div class="sb-group">Output</div>
+      <button class="sb-item" data-view="reports">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg><span>Reports</span>
+      </button>
     </nav>
-    <div class="topbar-actions">
+
+    <div class="sb-foot">
       <span id="saveState" class="save-state">Saved</span>
-      <div class="dropdown" id="exportDropdown">
-        <button class="btn btn-ghost" id="btnExport">⤓ Export ▾</button>
-        <div class="dropdown-menu" id="exportMenu">
-          <button data-export="excel-full">Full model → Excel</button>
-          <button data-export="data-pdf">Data tables → PDF</button>
-          <button data-export="quote-excel">Quote → Excel</button>
-          <div class="dropdown-sep"></div>
-          <button data-export="tenders-excel">Tender register → Excel</button>
-          <button data-export="tenders-pdf">Tender register → PDF</button>
-        </div>
-      </div>
-      <button class="btn btn-ghost" id="btnReset">↺ Reset</button>
+      <button class="sb-reset" id="btnReset" title="Reset workspace">↺ Reset workspace</button>
     </div>
-  </header>
+  </aside>
 
-  <main id="main">
+  <!-- MAIN =============================================================== -->
+  <div id="content">
+    <header id="topbar">
+      <button class="search" id="searchTrigger">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <span>Search tenders, lanes, actions…</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <div class="top-actions">
+        <div class="dropdown" id="exportDropdown">
+          <button class="btn btn-ghost" id="btnExport">
+            <svg viewBox="0 0 24 24" class="ico"><path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v3h14v-3"/></svg>Export
+          </button>
+          <div class="dropdown-menu" id="exportMenu">
+            <button data-export="excel-full">Full model → Excel</button>
+            <button data-export="data-pdf">Data tables → PDF</button>
+            <button data-export="quote-excel">Quote → Excel</button>
+            <div class="dropdown-sep"></div>
+            <button data-export="tenders-excel">Tender register → Excel</button>
+            <button data-export="tenders-pdf">Tender register → PDF</button>
+          </div>
+        </div>
+        <button class="icon-btn" id="themeToggle" title="Theme">
+          <svg viewBox="0 0 24 24" class="ico ico-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+          <svg viewBox="0 0 24 24" class="ico ico-moon"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z"/></svg>
+        </button>
+        <button class="icon-btn has-dot" id="bell" title="Notifications">
+          <svg viewBox="0 0 24 24" class="ico"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></svg>
+          <span class="dot" id="bellDot"></span>
+        </button>
+        <button class="btn btn-primary" id="btnNewTender">
+          <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>Create New Tender
+        </button>
+        <button class="profile" id="profile" title="Jordan Brown">JB</button>
+      </div>
+    </header>
 
-    <!-- INSTRUCTIONS ------------------------------------------------------ -->
-    <section class="panel active" id="panel-instructions">
-      <h1>JDT Pricing Model — Quick Guide</h1>
-      <p class="lede">Standalone desktop edition. Everything is saved automatically to
-        <code>jdt_pricing_data.json</code> next to the application — portable, offline, no Excel required.</p>
-      <div class="cards">
-        <div class="card"><h3>1 &middot; Set pricing assumptions</h3><p>Open <b>Settings</b> — update driver hourly, statutory loadings, vehicle $/km, fuel levy and target margin. Everything flows from these.</p></div>
-        <div class="card"><h3>2 &middot; Enter transport lanes</h3><p>On <b>Lanes</b>, fill the input cells: Vehicle, Spaces, Trips/wk, Hrs/trip, Km/trip (Tolls / Overnight / Load extras optional). 640 sample lanes are pre-loaded.</p></div>
-        <div class="card"><h3>3 &middot; Enter warehousing accounts</h3><p>On <b>Warehousing</b>, fill per customer: Pallets stored, Inbound/Outbound pallets/wk, Cases/wk, VAS hrs/wk.</p></div>
-        <div class="card"><h3>4 &middot; Flag items for the quote</h3><p>Tick <b>Quote?</b> on each lane / account to include it on the customer quote (up to 20 lanes + 10 warehousing lines).</p></div>
-        <div class="card"><h3>5 &middot; Fill customer details</h3><p>On <b>Quote</b>, type Customer, Contact and Quote #. Date auto-fills.</p></div>
-        <div class="card"><h3>6 &middot; Generate quote PDF</h3><p>Click <b>Generate Quote PDF</b>. The PDF is saved next to the app as <code>JDT_Quote_&lt;Customer&gt;_&lt;#&gt;_&lt;date&gt;.pdf</code> and opens automatically.</p></div>
-      </div>
-      <div class="legend">
-        <b>Decisions:</b>
-        <span class="pill go">GO</span> margin meets target &nbsp;
-        <span class="pill review">REVIEW</span> within 8 points — negotiate &nbsp;
-        <span class="pill nogo">NO-GO</span> below threshold — rework
-      </div>
-      <p class="note">Yellow cells are your inputs. White cells are formula-driven. Use <b>Reset</b> (top right) to wipe all inputs and restore Settings defaults — lane &amp; customer names are kept as the template.</p>
-    </section>
+    <div id="views">
 
-    <!-- SETTINGS ---------------------------------------------------------- -->
-    <section class="panel" id="panel-settings">
-      <h1>Global Settings</h1>
-      <p class="lede">Yellow cells are inputs. Everything else recalculates automatically.</p>
-      <div class="settings-grid">
-        <div class="setbox">
-          <h3>Driver labour</h3>
-          <label>Driver base hourly ($/hr)<input type="number" step="0.01" data-set="driverBaseHourly"></label>
-          <label>OT multiplier<input type="number" step="0.0001" data-set="otMultiplier"></label>
-          <label>Public holiday hourly ($/hr)<input type="number" step="0.01" data-set="publicHolidayHourly"></label>
-          <label>Linehaul hourly ($/hr)<input type="number" step="0.01" data-set="linehaulHourly"></label>
+      <!-- ACTIVE TENDERS -------------------------------------------------- -->
+      <section class="view" id="view-active-tenders">
+        <div class="view-head">
+          <div><h1>Active Tenders</h1><p class="sub">Live tender pipeline — click a row for full detail, route map and competing bids.</p></div>
+          <div class="view-tools">
+            <div class="seg" id="tenderStatusSeg"></div>
+            <input type="search" id="tenderSearch" class="field" placeholder="Filter…">
+            <button class="btn" id="btnCaptureTender" title="Capture the current priced model as a new tender">⧉ Capture model</button>
+          </div>
         </div>
-        <div class="setbox">
-          <h3>Statutory loadings <small>(decimals — 0.12 = 12%)</small></h3>
-          <label>Superannuation<input type="number" step="0.0001" data-set="superRate"></label>
-          <label>Workcover<input type="number" step="0.0001" data-set="workcoverRate"></label>
-          <label>Payroll tax<input type="number" step="0.0001" data-set="payrollTaxRate"></label>
-          <label class="calc">Loaded hourly rate ($/hr)<output id="loadedRate">—</output></label>
+        <div id="tenderStrip" class="stat-strip"></div>
+        <div class="grid-wrap">
+          <table class="dgrid" id="tendersTable">
+            <thead><tr id="tendersHead"></tr></thead>
+            <tbody id="tendersBody"></tbody>
+          </table>
         </div>
-        <div class="setbox">
-          <h3>Vehicle running cost ($/km)</h3>
-          <label>Ute<input type="number" step="0.01" data-set="vehicleRateUte"></label>
-          <label>Rigid<input type="number" step="0.01" data-set="vehicleRateRigid"></label>
-          <label>Semi<input type="number" step="0.01" data-set="vehicleRateSemi"></label>
-          <label>Bdouble<input type="number" step="0.01" data-set="vehicleRateBdouble"></label>
-        </div>
-        <div class="setbox">
-          <h3>Tender defaults</h3>
-          <label>Fuel levy %<input type="number" step="0.1" data-set="fuelLevyPct"></label>
-          <label>Target margin %<input type="number" step="0.1" data-set="targetMarginPct"></label>
-        </div>
-        <div class="setbox engine">
-          <h3>Engine</h3>
-          <ul>
-            <li>Loaded $/hr = base × OT × (1 + super) × (1 + workcover + payroll)</li>
-            <li>Labour cost = total hours × loaded $/hr</li>
-            <li>Fuel/veh cost = total km × vehicle $/km</li>
-            <li>Base cost = labour + fuel/veh + tolls + overnight + loading extras</li>
-            <li>Base price = base cost ÷ (1 − target margin)</li>
-            <li>Price inc FL = base price × (1 + fuel levy)</li>
-            <li>Margin % = (price − cost) ÷ price</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- LANES ------------------------------------------------------------- -->
-    <section class="panel" id="panel-lanes">
-      <div class="panel-head">
-        <div><h1>Lanes</h1><p class="lede">Yellow cells are inputs. Cost/trip → annual GP recalculates automatically.</p></div>
-        <div class="toolbar">
-          <input type="search" id="laneSearch" placeholder="Filter lanes…">
-          <button class="btn" id="btnAddLane">+ Add lane</button>
+      <!-- BID ANALYSIS ---------------------------------------------------- -->
+      <section class="view" id="view-bid-analysis">
+        <div class="view-head"><div><h1>Bid Analysis</h1><p class="sub">Pipeline health, win performance and portfolio economics.</p></div></div>
+        <div id="bidStrip" class="stat-strip"></div>
+        <div class="analysis-grid">
+          <div class="card"><div class="card-h">Pipeline by status</div><div id="statusBars" class="bars"></div></div>
+          <div class="card"><div class="card-h">Value by status</div><div id="valueBars" class="bars"></div></div>
+          <div class="card"><div class="card-h">Portfolio economics</div><dl id="bidPortfolio" class="kv"></dl></div>
         </div>
-      </div>
-      <div class="table-wrap tall">
-        <table class="grid" id="lanesTable">
-          <thead><tr>
-            <th>Origin</th><th>Destination</th><th>Vehicle</th>
-            <th class="in">Spaces</th><th class="in">Trips/wk</th><th class="in">Hrs/trip</th><th class="in">Km/trip</th>
-            <th class="in">Tolls $</th><th class="in">Overnt $</th><th class="in">Load $</th>
-            <th>Cost/trip</th><th>Base $</th><th>Price+FL</th><th>Margin</th>
-            <th>Annual rev</th><th>Annual GP</th><th>Decision</th><th class="in">Quote?</th><th></th>
-          </tr></thead>
-          <tbody id="lanesBody"></tbody>
-        </table>
-      </div>
-    </section>
+      </section>
 
-    <!-- WAREHOUSING ------------------------------------------------------- -->
-    <section class="panel" id="panel-warehousing">
-      <h1>Warehousing — Cost-to-Serve</h1>
-      <p class="lede">Yellow cells are inputs. Per-pallet prices and account margins recalculate automatically.</p>
-      <div class="settings-grid compact">
-        <div class="setbox">
-          <h3>Storage &amp; labour rates</h3>
-          <label>Pallet storage $/pallet/wk<input type="number" step="0.01" data-wh="storageRate"></label>
-          <label>Inbound handling $/pallet<input type="number" step="0.01" data-wh="inboundRate"></label>
-          <label>Outbound pick $/pallet<input type="number" step="0.01" data-wh="outboundRate"></label>
-          <label>Case pick $/case<input type="number" step="0.01" data-wh="casePickRate"></label>
-          <label>Value-add labour $/hr<input type="number" step="0.01" data-wh="labourRate"></label>
-          <label>Overhead per pallet/wk<input type="number" step="0.01" data-wh="overheadRate"></label>
-          <label>Target margin %<input type="number" step="0.1" data-wh="targetMargin"></label>
+      <!-- SETTINGS -------------------------------------------------------- -->
+      <section class="view" id="view-settings">
+        <div class="view-head"><div><h1>Global Settings</h1><p class="sub">Yellow cells are inputs. Everything else recalculates automatically.</p></div></div>
+        <div class="settings-grid">
+          <div class="setbox">
+            <h3>Driver labour</h3>
+            <label>Driver base hourly ($/hr)<input type="number" step="0.01" data-set="driverBaseHourly"></label>
+            <label>OT multiplier<input type="number" step="0.0001" data-set="otMultiplier"></label>
+            <label>Public holiday hourly ($/hr)<input type="number" step="0.01" data-set="publicHolidayHourly"></label>
+            <label>Linehaul hourly ($/hr)<input type="number" step="0.01" data-set="linehaulHourly"></label>
+          </div>
+          <div class="setbox">
+            <h3>Statutory loadings <small>(decimals — 0.12 = 12%)</small></h3>
+            <label>Superannuation<input type="number" step="0.0001" data-set="superRate"></label>
+            <label>Workcover<input type="number" step="0.0001" data-set="workcoverRate"></label>
+            <label>Payroll tax<input type="number" step="0.0001" data-set="payrollTaxRate"></label>
+            <label class="calc">Loaded hourly rate ($/hr)<output id="loadedRate">—</output></label>
+          </div>
+          <div class="setbox">
+            <h3>Vehicle running cost ($/km)</h3>
+            <label>Ute<input type="number" step="0.01" data-set="vehicleRateUte"></label>
+            <label>Rigid<input type="number" step="0.01" data-set="vehicleRateRigid"></label>
+            <label>Semi<input type="number" step="0.01" data-set="vehicleRateSemi"></label>
+            <label>Bdouble<input type="number" step="0.01" data-set="vehicleRateBdouble"></label>
+          </div>
+          <div class="setbox">
+            <h3>Tender defaults</h3>
+            <label>Fuel levy %<input type="number" step="0.1" data-set="fuelLevyPct"></label>
+            <label>Target margin %<input type="number" step="0.1" data-set="targetMarginPct"></label>
+          </div>
+          <div class="setbox engine">
+            <h3>Engine</h3>
+            <ul>
+              <li>Loaded $/hr = base × OT × (1 + super) × (1 + workcover + payroll)</li>
+              <li>Labour cost = total hours × loaded $/hr</li>
+              <li>Fuel/veh cost = total km × vehicle $/km</li>
+              <li>Base cost = labour + fuel/veh + tolls + overnight + loading extras</li>
+              <li>Base price = base cost ÷ (1 − target margin)</li>
+              <li>Price inc FL = base price × (1 + fuel levy)</li>
+              <li>Margin % = (price − cost) ÷ price</li>
+            </ul>
+          </div>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table class="grid" id="whTable">
-          <thead><tr>
-            <th>Customer</th><th class="in">Pallets</th><th class="in">Inb/wk</th><th class="in">Outb/wk</th>
-            <th class="in">Cases/wk</th><th class="in">VAS hrs/wk</th><th class="in">Other $/wk</th>
-            <th>Cost/wk</th><th>Base $/wk</th><th>Margin</th><th>$/pallet</th>
-            <th>Annual rev</th><th>Annual GP</th><th>Decision</th><th class="in">Quote?</th>
-          </tr></thead>
-          <tbody id="whBody"></tbody>
-        </table>
-      </div>
-    </section>
+      </section>
 
-    <!-- LEG BUILDER ------------------------------------------------------- -->
-    <section class="panel" id="panel-legbuilder">
-      <h1>Leg Builder</h1>
-      <p class="lede">Break a trip into legs of hours + km. Totals feed the live preview.</p>
-      <div class="leg-layout">
-        <div>
-          <div class="settings-grid compact">
-            <div class="setbox">
-              <h3>Trip</h3>
-              <label>Vehicle class
-                <select data-lb="vehicle"><option>Ute</option><option>Rigid</option><option>Semi</option><option>Bdouble</option></select>
-              </label>
-              <label>Pallet spaces<input type="number" step="1" data-lb="spaces"></label>
-              <label>Trips per week<input type="number" step="1" data-lb="trips"></label>
-              <label>Tolls $<input type="number" step="0.01" data-lb="tolls"></label>
-              <label>Overnight $<input type="number" step="0.01" data-lb="overnight"></label>
-              <label>Loading extras $<input type="number" step="0.01" data-lb="loadExtras"></label>
+      <!-- LANES ----------------------------------------------------------- -->
+      <section class="view" id="view-lanes">
+        <div class="view-head">
+          <div><h1>Lanes</h1><p class="sub">Yellow cells are inputs. Cost/trip → annual GP recalculates automatically.</p></div>
+          <div class="view-tools">
+            <input type="search" id="laneSearch" class="field" placeholder="Filter lanes…">
+            <button class="btn" id="btnAddLane">+ Add lane</button>
+          </div>
+        </div>
+        <div class="grid-wrap tall">
+          <table class="grid" id="lanesTable">
+            <thead><tr>
+              <th>Origin</th><th>Destination</th><th>Vehicle</th>
+              <th class="in">Spaces</th><th class="in">Trips/wk</th><th class="in">Hrs/trip</th><th class="in">Km/trip</th>
+              <th class="in">Tolls $</th><th class="in">Overnt $</th><th class="in">Load $</th>
+              <th>Cost/trip</th><th>Base $</th><th>Price+FL</th><th>Margin</th>
+              <th>Annual rev</th><th>Annual GP</th><th>Decision</th><th class="in">Quote?</th><th></th>
+            </tr></thead>
+            <tbody id="lanesBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- WAREHOUSING ----------------------------------------------------- -->
+      <section class="view" id="view-warehousing">
+        <div class="view-head"><div><h1>Warehousing — Cost-to-Serve</h1><p class="sub">Yellow cells are inputs. Per-pallet prices and account margins recalculate automatically.</p></div></div>
+        <div class="settings-grid compact">
+          <div class="setbox">
+            <h3>Storage &amp; labour rates</h3>
+            <label>Pallet storage $/pallet/wk<input type="number" step="0.01" data-wh="storageRate"></label>
+            <label>Inbound handling $/pallet<input type="number" step="0.01" data-wh="inboundRate"></label>
+            <label>Outbound pick $/pallet<input type="number" step="0.01" data-wh="outboundRate"></label>
+            <label>Case pick $/case<input type="number" step="0.01" data-wh="casePickRate"></label>
+            <label>Value-add labour $/hr<input type="number" step="0.01" data-wh="labourRate"></label>
+            <label>Overhead per pallet/wk<input type="number" step="0.01" data-wh="overheadRate"></label>
+            <label>Target margin %<input type="number" step="0.1" data-wh="targetMargin"></label>
+          </div>
+        </div>
+        <div class="grid-wrap">
+          <table class="grid" id="whTable">
+            <thead><tr>
+              <th>Customer</th><th class="in">Pallets</th><th class="in">Inb/wk</th><th class="in">Outb/wk</th>
+              <th class="in">Cases/wk</th><th class="in">VAS hrs/wk</th><th class="in">Other $/wk</th>
+              <th>Cost/wk</th><th>Base $/wk</th><th>Margin</th><th>$/pallet</th>
+              <th>Annual rev</th><th>Annual GP</th><th>Decision</th><th class="in">Quote?</th>
+            </tr></thead>
+            <tbody id="whBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- LEG BUILDER ----------------------------------------------------- -->
+      <section class="view" id="view-legbuilder">
+        <div class="view-head"><div><h1>Leg Builder</h1><p class="sub">Break a trip into legs of hours + km. Totals feed the live preview.</p></div></div>
+        <div class="leg-layout">
+          <div>
+            <div class="settings-grid compact">
+              <div class="setbox">
+                <h3>Trip</h3>
+                <label>Vehicle class
+                  <select data-lb="vehicle"><option>Ute</option><option>Rigid</option><option>Semi</option><option>Bdouble</option></select>
+                </label>
+                <label>Pallet spaces<input type="number" step="1" data-lb="spaces"></label>
+                <label>Trips per week<input type="number" step="1" data-lb="trips"></label>
+                <label>Tolls $<input type="number" step="0.01" data-lb="tolls"></label>
+                <label>Overnight $<input type="number" step="0.01" data-lb="overnight"></label>
+                <label>Loading extras $<input type="number" step="0.01" data-lb="loadExtras"></label>
+              </div>
+            </div>
+            <div class="grid-wrap">
+              <table class="grid" id="legTable">
+                <thead><tr><th>#</th><th>Label</th><th>Type</th><th class="in">Hours</th><th class="in">Km</th></tr></thead>
+                <tbody id="legBody"></tbody>
+                <tfoot><tr><th colspan="3">Totals</th><th id="legTotHrs">0</th><th id="legTotKm">0</th></tr></tfoot>
+              </table>
             </div>
           </div>
-          <div class="table-wrap">
-            <table class="grid" id="legTable">
-              <thead><tr><th>#</th><th>Label</th><th>Type</th><th class="in">Hours</th><th class="in">Km</th></tr></thead>
-              <tbody id="legBody"></tbody>
-              <tfoot><tr><th colspan="3">Totals</th><th id="legTotHrs">0</th><th id="legTotKm">0</th></tr></tfoot>
-            </table>
-          </div>
+          <aside class="preview">
+            <h3>Live preview</h3>
+            <dl id="legPreview"></dl>
+          </aside>
         </div>
-        <aside class="preview">
-          <h3>Live preview</h3>
-          <dl id="legPreview"></dl>
-        </aside>
-      </div>
-    </section>
+      </section>
 
-    <!-- SUMMARY ----------------------------------------------------------- -->
-    <section class="panel" id="panel-summary">
-      <h1>Portfolio Summary</h1>
-      <p class="lede">Combined transport + warehousing portfolio view (all lanes / accounts).</p>
-      <div class="summary-grid">
-        <div class="sumcard"><h3>Transport</h3><dl id="sumTransport"></dl></div>
-        <div class="sumcard"><h3>Warehousing</h3><dl id="sumWarehouse"></dl></div>
-        <div class="sumcard combined"><h3>Combined</h3><dl id="sumCombined"></dl></div>
-      </div>
-    </section>
-
-    <!-- QUOTE ------------------------------------------------------------- -->
-    <section class="panel" id="panel-quote">
-      <div class="panel-head">
-        <div><h1>Quotation</h1><p class="lede">Shows only items flagged <b>Quote? = Y</b> (20 transport + 10 warehousing lines).</p></div>
-        <div class="toolbar"><button class="btn btn-primary" id="btnPdf">▶ Generate Quote PDF</button></div>
-      </div>
-      <div class="quote-meta">
-        <label>Customer<input type="text" data-q="customer" placeholder="Customer name"></label>
-        <label>Contact<input type="text" data-q="contact" placeholder="Contact name / email"></label>
-        <label>Reference<input type="text" data-q="reference" placeholder="Site / address (optional)"></label>
-        <label>Quote #<input type="text" data-q="quoteNumber" placeholder="Q-0001"></label>
-        <label>Payment terms<input type="text" data-q="terms"></label>
-      </div>
-      <div id="quotePreview"></div>
-    </section>
-
-    <!-- TENDERS ----------------------------------------------------------- -->
-    <section class="panel" id="panel-tenders">
-      <div class="panel-head">
-        <div><h1>Tenders</h1><p class="lede">Track every tender from draft to outcome. Capture the current priced model as a tender and reload it any time.</p></div>
-        <div class="toolbar">
-          <select id="tenderStatusFilter"><option value="">All statuses</option></select>
-          <button class="btn" id="btnCaptureTender">⧉ Capture current model</button>
-          <button class="btn btn-primary" id="btnNewTender">+ New tender</button>
+      <!-- SUMMARY --------------------------------------------------------- -->
+      <section class="view" id="view-summary">
+        <div class="view-head"><div><h1>Portfolio Summary</h1><p class="sub">Combined transport + warehousing portfolio view (all lanes / accounts).</p></div></div>
+        <div class="summary-grid">
+          <div class="sumcard"><h3>Transport</h3><dl id="sumTransport"></dl></div>
+          <div class="sumcard"><h3>Warehousing</h3><dl id="sumWarehouse"></dl></div>
+          <div class="sumcard combined"><h3>Combined</h3><dl id="sumCombined"></dl></div>
         </div>
-      </div>
+      </section>
 
-      <div class="pipeline" id="pipeline"></div>
+      <!-- QUOTE ----------------------------------------------------------- -->
+      <section class="view" id="view-quote">
+        <div class="view-head">
+          <div><h1>Quotation</h1><p class="sub">Shows only items flagged <b>Quote? = Y</b> (20 transport + 10 warehousing lines).</p></div>
+          <div class="view-tools"><button class="btn btn-primary" id="btnPdf">Generate Quote PDF</button></div>
+        </div>
+        <div class="quote-meta">
+          <label>Customer<input type="text" data-q="customer" placeholder="Customer name"></label>
+          <label>Contact<input type="text" data-q="contact" placeholder="Contact name / email"></label>
+          <label>Reference<input type="text" data-q="reference" placeholder="Site / address (optional)"></label>
+          <label>Quote #<input type="text" data-q="quoteNumber" placeholder="Q-0001"></label>
+          <label>Payment terms<input type="text" data-q="terms"></label>
+        </div>
+        <div id="quotePreview"></div>
+      </section>
 
-      <div class="table-wrap" style="margin-top:16px">
-        <table class="grid" id="tendersTable">
-          <thead><tr>
-            <th class="in">Reference</th><th class="in">Customer</th><th class="in">Title</th>
-            <th class="in">Status</th><th class="in">Due date</th><th class="in">Value $</th>
-            <th class="in">Prob %</th><th class="in">Owner</th><th class="in">Notes</th>
-            <th>Weighted $</th><th>Saved?</th><th>Updated</th><th>Actions</th>
-          </tr></thead>
-          <tbody id="tendersBody"></tbody>
-        </table>
-      </div>
-      <p class="note"><b>Capture current model</b> saves a full snapshot (Settings, Lanes, Warehousing, Quote) onto a tender, with its value taken from the current total contract value. <b>Load</b> restores that snapshot into the workspace. Rows turn amber when a tender is due within 14 days and red when overdue.</p>
-    </section>
+      <!-- CARRIER NETWORK ------------------------------------------------- -->
+      <section class="view" id="view-carrier-network">
+        <div class="view-head">
+          <div><h1>Carrier Network</h1><p class="sub">Subcontractor &amp; partner carriers available to fulfil awarded lanes.</p></div>
+          <div class="view-tools"><button class="btn btn-primary" id="btnAddCarrier">+ Add carrier</button></div>
+        </div>
+        <div class="grid-wrap">
+          <table class="grid" id="carrierTable">
+            <thead><tr>
+              <th>Carrier</th><th>Base / region</th><th>Fleet</th><th>Lanes served</th>
+              <th class="in">Rating</th><th>Compliance</th><th>Contact</th><th></th>
+            </tr></thead>
+            <tbody id="carrierBody"></tbody>
+          </table>
+        </div>
+        <div id="carrierEmpty" class="empty-state" hidden>
+          <div class="es-icon">⊕</div>
+          <h3>No carriers yet</h3>
+          <p>Build your carrier network to assign awarded lanes. Add fleet, lanes served, compliance status and contact details.</p>
+          <button class="btn btn-primary" id="btnAddCarrier2">+ Add your first carrier</button>
+        </div>
+      </section>
 
-  </main>
+      <!-- COMPLIANCE ------------------------------------------------------ -->
+      <section class="view" id="view-compliance">
+        <div class="view-head">
+          <div><h1>Compliance Register</h1><p class="sub">Chain-of-Responsibility &amp; cold-chain obligations. Keep statuses current.</p></div>
+          <div class="view-tools"><button class="btn" id="btnAddCompliance">+ Add item</button></div>
+        </div>
+        <div id="complianceStrip" class="stat-strip"></div>
+        <div class="grid-wrap">
+          <table class="grid" id="complianceTable">
+            <thead><tr>
+              <th>Obligation</th><th>Owner</th><th>Status</th><th class="in">Next review</th><th>Notes</th><th></th>
+            </tr></thead>
+            <tbody id="complianceBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- REPORTS --------------------------------------------------------- -->
+      <section class="view" id="view-reports">
+        <div class="view-head"><div><h1>Reports</h1><p class="sub">Generate documents next to the application — they open automatically.</p></div></div>
+        <div class="report-grid" id="reportGrid"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- CONTEXTUAL DETAIL PANEL ============================================ -->
+  <aside id="ctx" class="ctx" aria-hidden="true"></aside>
+  <div id="ctxScrim" class="scrim" hidden></div>
+
+  <!-- COMMAND PALETTE ==================================================== -->
+  <div id="cmdk" class="cmdk" hidden>
+    <div class="cmdk-box">
+      <input id="cmdkInput" class="cmdk-input" placeholder="Search tenders, lanes, navigate…" autocomplete="off">
+      <div id="cmdkList" class="cmdk-list"></div>
+    </div>
+  </div>
 
   <div id="toast" class="toast"></div>
+</div>
 
   <script src="/static/engine.js"></script>
   <script src="/static/seed.js"></script>

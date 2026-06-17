@@ -71,14 +71,23 @@
   }
 
   var TENDER_STATUSES = ["Draft", "Submitted", "Shortlisted", "Won", "Lost", "No-bid"];
+  var BID_STATUSES = ["Pending", "Awarded", "Rejected"];
+  var COMPLIANCE_STATUSES = ["Compliant", "Due", "Overdue", "N/A"];
+
+  function uid(prefix) {
+    return (prefix || "id") + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  }
 
   function newTender(seed) {
     seed = seed || {};
     return {
-      id: "t" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      id: uid("t"),
       reference: seed.reference || "",
       customer: seed.customer || "",
       title: seed.title || "",
+      origin: seed.origin || "",
+      destination: seed.destination || "",
+      volume: seed.volume != null ? seed.volume : "",
       status: seed.status || "Draft",
       dueDate: seed.dueDate || "",
       submittedDate: seed.submittedDate || "",
@@ -86,9 +95,50 @@
       probability: seed.probability != null ? seed.probability : 50,
       owner: seed.owner || "Jordan Brown",
       notes: seed.notes || "",
+      bids: Array.isArray(seed.bids) ? seed.bids : [],
       snapshot: seed.snapshot || null,
       updatedAt: new Date().toISOString().slice(0, 10)
     };
+  }
+
+  function newBid(seed) {
+    seed = seed || {};
+    return {
+      id: uid("b"), carrier: seed.carrier || "", amount: seed.amount != null ? seed.amount : "",
+      leadTime: seed.leadTime || "", status: seed.status || "Pending", notes: seed.notes || ""
+    };
+  }
+
+  function newCarrier(seed) {
+    seed = seed || {};
+    return {
+      id: uid("c"), name: seed.name || "", base: seed.base || "", fleet: seed.fleet || "",
+      lanes: seed.lanes || "", rating: seed.rating != null ? seed.rating : "",
+      compliance: seed.compliance || "Compliant", contact: seed.contact || ""
+    };
+  }
+
+  function newComplianceItem(seed) {
+    seed = seed || {};
+    return {
+      id: uid("cm"), item: seed.item || "", owner: seed.owner || "", status: seed.status || "Due",
+      due: seed.due || "", notes: seed.notes || ""
+    };
+  }
+
+  // Standard Chain-of-Responsibility / cold-chain compliance register (a scaffold
+  // the operator can keep current — statuses are theirs to set).
+  function seedCompliance() {
+    return [
+      "Mass management & axle-load policy",
+      "Maintenance management & daily pre-start checks",
+      "Fatigue management (BFM / work diary)",
+      "Speed management policy",
+      "Load restraint compliance",
+      "Cold-chain temperature monitoring & calibration",
+      "Public liability & goods-in-transit insurance",
+      "Driver licensing, inductions & medicals"
+    ].map(function (item) { return newComplianceItem({ item: item, owner: "Operations", status: "Due" }); });
   }
 
   // lanes injected by the caller (from seed_lanes.json)
@@ -100,7 +150,9 @@
       accounts: defaultAccounts(),
       legBuilder: defaultLegBuilder(),
       quote: defaultQuote(),
-      tenders: []
+      tenders: [],
+      carriers: [],
+      compliance: seedCompliance()
     };
   }
 
@@ -113,7 +165,13 @@
     defaultQuote: defaultQuote,
     defaultState: defaultState,
     newTender: newTender,
+    newBid: newBid,
+    newCarrier: newCarrier,
+    newComplianceItem: newComplianceItem,
+    seedCompliance: seedCompliance,
     TENDER_STATUSES: TENDER_STATUSES,
+    BID_STATUSES: BID_STATUSES,
+    COMPLIANCE_STATUSES: COMPLIANCE_STATUSES,
     VEHICLES: ["Ute", "Rigid", "Semi", "Bdouble"]
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

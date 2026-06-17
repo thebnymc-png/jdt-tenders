@@ -5,7 +5,7 @@ app = create_app()
 c = app.test_client()
 
 # index serves
-r = c.get("/"); assert r.status_code==200 and b"JDT Pricing Model" in r.data, "index fail"
+r = c.get("/"); assert r.status_code==200 and b"Tender" in r.data and b"sidebar" in r.data, "index fail"
 print("index OK")
 # static engine.js
 r = c.get("/static/engine.js"); assert r.status_code==200 and b"computeLane" in r.data; print("static OK")

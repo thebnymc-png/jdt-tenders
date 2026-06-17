@@ -9,6 +9,27 @@ shared drive and run it. All data and generated quote PDFs are saved next to the
 Every formula and decision rule was ported 1:1 from the workbook and verified
 against its live values (see `tests/`).
 
+## Console (enterprise UI)
+
+The app uses a "Clean Technical" desktop console (Linear/Vercel style) built for
+high-volume, professional use:
+
+- **Collapsible sidebar** IA: Active Tenders, Bid Analysis · Settings, Lanes,
+  Warehousing, Leg Builder, Quote, Portfolio · Carrier Network, Compliance · Reports.
+- **Active Tenders** — a dense, sortable grid (route, volume, deadline, bids,
+  value, status) with inline hover actions (Edit / Award / Reject), expandable
+  rows showing competing bids, and a **slide-out detail panel** with an editable
+  form, a **live route map** (OpenStreetMap; needs internet, degrades gracefully
+  offline) and full bid management.
+- **Bid Analysis** — pipeline-by-status and value-by-status breakdowns plus
+  portfolio economics.
+- **Carrier Network & Compliance** — editable registers (Compliance ships seeded
+  with a Chain-of-Responsibility checklist).
+- **Command palette** (⌘K / Ctrl-K) to jump to any view, tender or action.
+- **Light / dark themes** that follow the OS by default, with a header toggle.
+- Tabular numerals, 1px borders, WCAG-AA contrast, Inter (falls back to the
+  native SF Pro / Segoe UI when offline).
+
 ## What it does
 
 | Tab | Purpose |
