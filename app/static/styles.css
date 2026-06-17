@@ -129,4 +129,47 @@ tr.row-NO-GO td.calc{background:var(--nogo-bg)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.err{background:var(--nogo)}
 
+/* export dropdown */
+.dropdown{position:relative}
+.dropdown-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 36px #0003;padding:6px;min-width:210px;display:none;z-index:40}
+.dropdown.open .dropdown-menu{display:block}
+.dropdown-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--txt);padding:9px 12px;border-radius:7px;cursor:pointer;font-size:13px}
+.dropdown-menu button:hover{background:var(--ice)}
+.dropdown-sep{height:1px;background:var(--line);margin:5px 4px}
+
+/* tenders — pipeline dashboard */
+.pipeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.pcard .pk{font-size:12px;color:var(--muted);font-weight:600}
+.pcard .pv{font-size:22px;font-weight:800;color:var(--navy);margin-top:2px}
+.pcard .ps{font-size:11px;color:var(--muted);margin-top:2px}
+.pcard.win .pv{color:var(--go)}
+.pcard.alert{background:var(--review-bg);border-color:var(--review)}
+.pcard.alert .pv{color:var(--review)}
+.pcard.danger{background:var(--nogo-bg);border-color:var(--nogo)}
+.pcard.danger .pv{color:var(--nogo)}
+
+/* status badge selects in tender grid */
+.badge-status{font-weight:700;border-radius:6px}
+select.st-Draft{color:#52606e}
+select.st-Submitted{color:#1c5fb0}
+select.st-Shortlisted{color:#7a4ec0}
+select.st-Won{color:var(--go)}
+select.st-Lost{color:var(--nogo)}
+select.st-Nobid{color:#8a8f98}
+tr.due-soon td.calc,tr.due-soon td:nth-child(5){background:var(--review-bg)}
+tr.due-overdue td.calc,tr.due-overdue td:nth-child(5){background:var(--nogo-bg)}
+.tact{display:flex;gap:4px}
+.tact button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:600}
+.tact button:hover{background:var(--ice)}
+.tact .load{color:var(--navy)}
+.tact .del{color:var(--nogo)}
+#tendersTable input,#tendersTable select{min-width:0}
+#tendersTable input[data-f="reference"],#tendersTable input[data-f="customer"],#tendersTable input[data-f="title"]{width:130px}
+#tendersTable input[data-f="notes"]{width:170px}
+#tendersTable input[data-f="value"]{width:96px}
+#tendersTable input[data-f="dueDate"]{width:132px}
+#tendersTable input[data-f="probability"]{width:64px}
+#tendersTable input[data-f="owner"]{width:110px}
+
 @media(max-width:980px){.leg-layout{grid-template-columns:1fr}.preview{position:static}}

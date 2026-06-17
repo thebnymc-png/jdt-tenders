@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request, send_from_directory, render_template
 
 from . import paths
 from .pdf_quote import generate_quote_pdf, build_filename
+from .exporters import run_export
 
 
 def create_app() -> Flask:
@@ -63,6 +64,16 @@ def create_app() -> Flask:
         try:
             generate_quote_pdf(payload, out_path)
         except Exception as exc:  # noqa: BLE001 - surface any render error to the UI
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        _open_file(out_path)
+        return jsonify({"ok": True, "filename": filename, "path": out_path})
+
+    @app.route("/api/export", methods=["POST"])
+    def export():
+        payload = request.get_json(force=True, silent=True) or {}
+        try:
+            filename, out_path = run_export(payload, paths.app_dir())
+        except Exception as exc:  # noqa: BLE001 - surface render errors to the UI
             return jsonify({"ok": False, "error": str(exc)}), 500
         _open_file(out_path)
         return jsonify({"ok": True, "filename": filename, "path": out_path})

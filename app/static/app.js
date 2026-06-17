@@ -58,7 +58,27 @@
     s.legBuilder = Object.assign({}, base.legBuilder, s.legBuilder || {});
     if (!Array.isArray(s.lanes) || !s.lanes.length) s.lanes = base.lanes;
     if (!Array.isArray(s.accounts) || !s.accounts.length) s.accounts = base.accounts;
+    if (!Array.isArray(s.tenders)) s.tenders = [];
     return s;
+  }
+
+  // Snapshot = the working model without the tender register (avoids recursion/bloat).
+  function snapshotModel() {
+    return JSON.parse(JSON.stringify({
+      settings: state.settings, warehousing: state.warehousing,
+      lanes: state.lanes, accounts: state.accounts,
+      legBuilder: state.legBuilder, quote: state.quote
+    }));
+  }
+  function restoreModel(snap) {
+    if (!snap) return;
+    var base = Seed.defaultState(seedLanes);
+    state.settings = Object.assign({}, base.settings, snap.settings || {});
+    state.warehousing = Object.assign({}, base.warehousing, snap.warehousing || {});
+    state.quote = Object.assign({}, base.quote, snap.quote || {});
+    state.legBuilder = Object.assign({}, base.legBuilder, snap.legBuilder || {});
+    state.lanes = Array.isArray(snap.lanes) && snap.lanes.length ? snap.lanes : base.lanes;
+    state.accounts = Array.isArray(snap.accounts) && snap.accounts.length ? snap.accounts : base.accounts;
   }
 
   // ---- tabs ----------------------------------------------------------------
@@ -79,6 +99,7 @@
     else if (tab === "legbuilder") renderLegBuilder();
     else if (tab === "summary") renderSummary();
     else if (tab === "quote") renderQuote();
+    else if (tab === "tenders") renderTenders();
   }
 
   // ---- settings ------------------------------------------------------------
@@ -351,6 +372,210 @@
       .catch(function (e) { btn.disabled = false; btn.textContent = "▶ Generate Quote PDF"; toast("PDF failed: " + e, true); });
   }
 
+  // ---- tenders -------------------------------------------------------------
+  function renderPipeline() {
+    var p = E.computePipeline(state.tenders);
+    var cards = [
+      { k: "Open tenders", v: p.openCount, s: fmtMoney(p.openValue) + " pipeline" },
+      { k: "Weighted value", v: fmtMoney(p.weightedValue), s: "probability-adjusted" },
+      { k: "Won", v: fmtMoney(p.wonValue), s: p.wonCount + " tender" + (p.wonCount === 1 ? "" : "s"), cls: "win" },
+      { k: "Win rate", v: (p.winRate * 100).toFixed(0) + "%", s: p.wonCount + "W / " + p.lostCount + "L", cls: "win" },
+      { k: "Due ≤14 days", v: p.dueSoon, s: "closing soon", cls: p.dueSoon ? "alert" : "" },
+      { k: "Overdue", v: p.overdue, s: "past due date", cls: p.overdue ? "danger" : "" }
+    ];
+    el("pipeline").innerHTML = cards.map(function (c) {
+      return '<div class="pcard ' + (c.cls || "") + '"><div class="pk">' + c.k + '</div><div class="pv">' + c.v + '</div><div class="ps">' + c.s + "</div></div>";
+    }).join("");
+  }
+  function tenderRowHtml(t, idx) {
+    var weighted = E.num(t.value) * E.num(t.probability) / 100;
+    var due = E.tenderDueState(t);
+    var opts = Seed.TENDER_STATUSES.map(function (s) {
+      return '<option' + (s === t.status ? " selected" : "") + ">" + s + "</option>";
+    }).join("");
+    function inp(f, type) { return '<input data-tid="' + idx + '" data-f="' + f + '" type="' + (type || "text") + '" value="' + esc(t[f]) + '">'; }
+    return '<tr class="' + (due ? "due-" + due : "") + '" data-trow="' + idx + '">' +
+      '<td class="txt">' + inp("reference") + "</td>" +
+      '<td class="txt">' + inp("customer") + "</td>" +
+      '<td class="txt">' + inp("title") + "</td>" +
+      '<td class="txt"><select class="badge-status st-' + (t.status || "Draft").replace(/[^A-Za-z]/g, "") + '" data-tid="' + idx + '" data-f="status">' + opts + "</select></td>" +
+      "<td>" + inp("dueDate", "date") + "</td>" +
+      "<td>" + inp("value", "number") + "</td>" +
+      "<td>" + inp("probability", "number") + "</td>" +
+      '<td class="txt">' + inp("owner") + "</td>" +
+      '<td class="txt">' + inp("notes") + "</td>" +
+      '<td class="calc">' + fmtMoney(weighted) + "</td>" +
+      '<td class="calc">' + (t.snapshot ? "✓" : "—") + "</td>" +
+      '<td class="calc">' + esc(t.updatedAt || "") + "</td>" +
+      '<td><div class="tact">' +
+        '<button class="load" data-load="' + idx + '"' + (t.snapshot ? "" : " disabled title=\"No saved snapshot\"") + ">Load</button>" +
+        '<button data-savetender="' + idx + '" title="Save current model onto this tender">Save</button>' +
+        '<button class="del" data-deltender="' + idx + '">✕</button>' +
+      "</div></td></tr>";
+  }
+  function renderTenders() {
+    // status filter options
+    var filter = el("tenderStatusFilter");
+    if (filter.options.length <= 1) {
+      Seed.TENDER_STATUSES.forEach(function (s) {
+        var o = document.createElement("option"); o.value = s; o.textContent = s; filter.appendChild(o);
+      });
+    }
+    renderPipeline();
+    var fval = filter.value;
+    var body = el("tendersBody"), html = "";
+    state.tenders.forEach(function (t, i) {
+      if (fval && (t.status || "Draft") !== fval) return;
+      html += tenderRowHtml(t, i);
+    });
+    body.innerHTML = html || '<tr><td colspan="13" class="empty">No tenders yet. Use “New tender” or “Capture current model”.</td></tr>';
+  }
+  function touchTender(t) { t.updatedAt = new Date().toISOString().slice(0, 10); }
+  function bindTenders() {
+    var body = el("tendersBody");
+    body.addEventListener("input", function (e) {
+      var idx = e.target.dataset.tid; if (idx == null) return;
+      var t = state.tenders[idx], f = e.target.dataset.f;
+      t[f] = e.target.value;
+      touchTender(t);
+      // live-update weighted cell + due highlight without full re-render
+      var tr = body.querySelector('tr[data-trow="' + idx + '"]');
+      if (tr) {
+        tr.querySelectorAll("td.calc")[0].textContent = fmtMoney(E.num(t.value) * E.num(t.probability) / 100);
+        var due = E.tenderDueState(t);
+        tr.className = due ? "due-" + due : "";
+      }
+      if (f === "status") {
+        e.target.className = "badge-status st-" + (t.status || "Draft").replace(/[^A-Za-z]/g, "");
+        renderPipeline();
+      }
+      markDirty();
+    });
+    body.addEventListener("click", function (e) {
+      var load = e.target.closest("[data-load]");
+      var save = e.target.closest("[data-savetender]");
+      var del = e.target.closest("[data-deltender]");
+      if (load && !load.disabled) {
+        var t = state.tenders[load.dataset.load];
+        if (!confirm("Load tender “" + (t.reference || t.customer || "untitled") + "”?\n\nThis replaces the current workspace (Settings, Lanes, Warehousing, Quote) with the saved snapshot. Your tender register is kept.")) return;
+        restoreModel(t.snapshot); save_(); toast("Loaded tender into workspace.");
+        document.querySelector('.tab[data-tab="summary"]').click();
+      } else if (save) {
+        var tt = state.tenders[save.dataset.savetender];
+        captureInto(tt); renderTenders(); save_(); toast("Saved current model onto “" + (tt.reference || tt.customer || "tender") + "”.");
+      } else if (del) {
+        if (!confirm("Delete this tender? This cannot be undone.")) return;
+        state.tenders.splice(parseInt(del.dataset.deltender, 10), 1);
+        renderTenders(); markDirty();
+      }
+    });
+    el("tenderStatusFilter").addEventListener("change", renderTenders);
+    el("btnNewTender").addEventListener("click", function () {
+      state.tenders.unshift(Seed.newTender({ customer: state.quote.customer || "", reference: state.quote.quoteNumber || "" }));
+      el("tenderStatusFilter").value = ""; renderTenders(); markDirty();
+    });
+    el("btnCaptureTender").addEventListener("click", function () {
+      var t = Seed.newTender({
+        customer: state.quote.customer || "", reference: state.quote.quoteNumber || "",
+        title: "Captured " + new Date().toISOString().slice(0, 10)
+      });
+      captureInto(t);
+      state.tenders.unshift(t);
+      el("tenderStatusFilter").value = ""; renderTenders(); save_();
+      toast("Captured current model as a new tender.");
+    });
+  }
+  // Save the current workspace + its total value onto a tender.
+  function captureInto(t) {
+    t.snapshot = snapshotModel();
+    var q = E.buildQuote(state);
+    if (q.totalAnnual > 0) t.value = Math.round(q.totalAnnual);
+    if (!t.customer) t.customer = state.quote.customer || "";
+    if (!t.reference) t.reference = state.quote.quoteNumber || "";
+    touchTender(t);
+  }
+  function save_() { save(); }  // alias used after programmatic state changes
+
+  // ---- exports -------------------------------------------------------------
+  function activeLanes() {
+    return state.lanes.filter(function (l) {
+      return E.num(l.spaces) > 0 || E.num(l.trips) > 0 || E.num(l.hrs) > 0 || E.num(l.km) > 0;
+    });
+  }
+  function activeAccounts() {
+    return state.accounts.filter(function (a) {
+      return E.num(a.pallets) > 0 || (!E.isBlank(a.customer) && E.num(a.pallets) >= 0 && (E.num(a.inb) || E.num(a.outb) || E.num(a.cases) || E.num(a.vasHrs)));
+    });
+  }
+  function laneExportRows(lanes) {
+    return lanes.map(function (l) {
+      var r = E.computeLane(l, state.settings);
+      return {
+        origin: l.origin || "", dest: l.dest || "", vehicle: l.vehicle || "",
+        spaces: E.num(l.spaces), trips: E.num(l.trips), hrs: E.num(l.hrs), km: E.num(l.km),
+        tolls: E.num(l.tolls), overnight: E.num(l.overnight), loadExtras: E.num(l.loadExtras),
+        cost: r.cost, base: r.base, priceFL: r.priceFL, margin: r.margin,
+        annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: l.quote || ""
+      };
+    });
+  }
+  function accountExportRows(accs) {
+    return accs.map(function (a) {
+      var r = E.computeWarehouse(a, state.warehousing);
+      return {
+        customer: a.customer || "", pallets: E.num(a.pallets), inb: E.num(a.inb), outb: E.num(a.outb),
+        cases: E.num(a.cases), vasHrs: E.num(a.vasHrs), other: E.num(a.other),
+        cost: r.cost, base: r.base, margin: r.margin, perPallet: r.perPallet,
+        annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: a.quote || ""
+      };
+    });
+  }
+  function buildExportPayload(type) {
+    var p = { type: type };
+    if (type === "excel-full") {
+      p.settings = state.settings; p.warehousing = state.warehousing;
+      p.lanes = laneExportRows(state.lanes);
+      p.accounts = accountExportRows(state.accounts);
+      p.summary = E.computeSummary(state);
+      p.tenders = state.tenders; p.pipeline = E.computePipeline(state.tenders);
+    } else if (type === "data-pdf") {
+      p.lanes = laneExportRows(activeLanes());
+      p.accounts = accountExportRows(activeAccounts());
+      p.summary = E.computeSummary(state);
+    } else if (type === "quote-excel") {
+      p.quote = state.quote; p.computed = E.buildQuote(state);
+    } else if (type === "tenders-excel" || type === "tenders-pdf") {
+      p.tenders = state.tenders; p.pipeline = E.computePipeline(state.tenders);
+    }
+    return p;
+  }
+  function doExport(type) {
+    if ((type === "tenders-excel" || type === "tenders-pdf") && !state.tenders.length) {
+      return toast("No tenders to export yet.", true);
+    }
+    if (type === "quote-excel") {
+      var q = E.buildQuote(state);
+      if (!q.transport.length && !q.warehousing.length) return toast("Nothing flagged for the quote — set Quote? = Y first.", true);
+    }
+    save();
+    toast("Generating export…");
+    fetch("/api/export", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildExportPayload(type))
+    }).then(function (r) { return r.json(); })
+      .then(function (res) { if (res.ok) toast("Saved: " + res.filename); else toast(res.error || "Export failed", true); })
+      .catch(function (e) { toast("Export failed: " + e, true); });
+  }
+  function bindExport() {
+    var dd = el("exportDropdown");
+    el("btnExport").addEventListener("click", function (e) { e.stopPropagation(); dd.classList.toggle("open"); });
+    document.addEventListener("click", function () { dd.classList.remove("open"); });
+    el("exportMenu").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-export]"); if (!b) return;
+      dd.classList.remove("open"); doExport(b.dataset.export);
+    });
+  }
+
   // ---- reset ---------------------------------------------------------------
   function bindReset() {
     el("btnReset").addEventListener("click", function () {
@@ -360,9 +585,11 @@
         return { origin: l.origin, dest: l.dest, vehicle: l.vehicle, spaces: "", trips: "", hrs: "", km: "", tolls: "", overnight: "", loadExtras: "", quote: "" };
       });
       var keptAccounts = state.accounts.map(function (a) { return Seed.emptyAccount(a.customer); });
+      var keptTenders = state.tenders;  // tender register survives a workspace reset
       state = Seed.defaultState(seedLanes);
       state.lanes = keptLanes;
       state.accounts = keptAccounts;
+      state.tenders = keptTenders;
       save();
       renderActive(document.querySelector(".tab.active").dataset.tab);
       toast("Workbook reset to template.");
@@ -379,7 +606,7 @@
   // ---- boot ----------------------------------------------------------------
   load().then(function () {
     setupTabs(); bindSettings(); bindLanes(); bindWarehousing();
-    bindLegBuilder(); bindQuote(); bindReset();
+    bindLegBuilder(); bindQuote(); bindTenders(); bindExport(); bindReset();
     renderSettings();
   });
 })();

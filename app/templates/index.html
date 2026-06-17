@@ -23,9 +23,21 @@
       <button class="tab" data-tab="legbuilder">Leg Builder</button>
       <button class="tab" data-tab="summary">Summary</button>
       <button class="tab" data-tab="quote">Quote</button>
+      <button class="tab" data-tab="tenders">Tenders</button>
     </nav>
     <div class="topbar-actions">
       <span id="saveState" class="save-state">Saved</span>
+      <div class="dropdown" id="exportDropdown">
+        <button class="btn btn-ghost" id="btnExport">⤓ Export ▾</button>
+        <div class="dropdown-menu" id="exportMenu">
+          <button data-export="excel-full">Full model → Excel</button>
+          <button data-export="data-pdf">Data tables → PDF</button>
+          <button data-export="quote-excel">Quote → Excel</button>
+          <div class="dropdown-sep"></div>
+          <button data-export="tenders-excel">Tender register → Excel</button>
+          <button data-export="tenders-pdf">Tender register → PDF</button>
+        </div>
+      </div>
       <button class="btn btn-ghost" id="btnReset">↺ Reset</button>
     </div>
   </header>
@@ -211,6 +223,33 @@
         <label>Payment terms<input type="text" data-q="terms"></label>
       </div>
       <div id="quotePreview"></div>
+    </section>
+
+    <!-- TENDERS ----------------------------------------------------------- -->
+    <section class="panel" id="panel-tenders">
+      <div class="panel-head">
+        <div><h1>Tenders</h1><p class="lede">Track every tender from draft to outcome. Capture the current priced model as a tender and reload it any time.</p></div>
+        <div class="toolbar">
+          <select id="tenderStatusFilter"><option value="">All statuses</option></select>
+          <button class="btn" id="btnCaptureTender">⧉ Capture current model</button>
+          <button class="btn btn-primary" id="btnNewTender">+ New tender</button>
+        </div>
+      </div>
+
+      <div class="pipeline" id="pipeline"></div>
+
+      <div class="table-wrap" style="margin-top:16px">
+        <table class="grid" id="tendersTable">
+          <thead><tr>
+            <th class="in">Reference</th><th class="in">Customer</th><th class="in">Title</th>
+            <th class="in">Status</th><th class="in">Due date</th><th class="in">Value $</th>
+            <th class="in">Prob %</th><th class="in">Owner</th><th class="in">Notes</th>
+            <th>Weighted $</th><th>Saved?</th><th>Updated</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="tendersBody"></tbody>
+        </table>
+      </div>
+      <p class="note"><b>Capture current model</b> saves a full snapshot (Settings, Lanes, Warehousing, Quote) onto a tender, with its value taken from the current total contract value. <b>Load</b> restores that snapshot into the workspace. Rows turn amber when a tender is due within 14 days and red when overdue.</p>
     </section>
 
   </main>

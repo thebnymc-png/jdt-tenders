@@ -16,7 +16,7 @@ datas = [
     (os.path.join(APP, "static"), "app/static"),
 ]
 binaries = []
-hiddenimports = ["app", "app.server", "app.main", "app.pdf_quote", "app.paths"]
+hiddenimports = ["app", "app.server", "app.main", "app.pdf_quote", "app.paths", "app.exporters"]
 
 # pywebview + its Windows backend (Edge WebView2 via pythonnet) ship extra
 # data/binaries and dynamically imported modules — pull them all in.

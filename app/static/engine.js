@@ -224,12 +224,60 @@
     };
   }
 
+  // ---- tender pipeline -----------------------------------------------------
+  var OPEN_STATUSES = { "Draft": 1, "Submitted": 1, "Shortlisted": 1 };
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var d = new Date(dateStr); if (isNaN(d)) return null;
+    d.setHours(0, 0, 0, 0);
+    return Math.round((d - today) / 86400000);
+  }
+
+  // Row state for due-date highlighting (open tenders only).
+  function tenderDueState(t) {
+    if (!t || !OPEN_STATUSES[t.status || "Draft"]) return "";
+    var days = daysUntil(t.dueDate);
+    if (days === null) return "";
+    if (days < 0) return "overdue";
+    if (days <= 14) return "soon";
+    return "";
+  }
+
+  function computePipeline(tenders) {
+    var s = {
+      total: 0, byStatus: {}, openCount: 0, openValue: 0, weightedValue: 0,
+      wonCount: 0, wonValue: 0, lostCount: 0, lostValue: 0,
+      winRate: 0, dueSoon: 0, overdue: 0
+    };
+    (tenders || []).forEach(function (t) {
+      s.total++;
+      var st = t.status || "Draft";
+      s.byStatus[st] = (s.byStatus[st] || 0) + 1;
+      var v = num(t.value);
+      if (OPEN_STATUSES[st]) {
+        s.openCount++;
+        s.openValue += v;
+        s.weightedValue += v * num(t.probability) / 100;
+        var ds = tenderDueState(t);
+        if (ds === "overdue") s.overdue++;
+        else if (ds === "soon") s.dueSoon++;
+      }
+      if (st === "Won") { s.wonCount++; s.wonValue += v; }
+      else if (st === "Lost") { s.lostCount++; s.lostValue += v; }
+    });
+    s.winRate = (s.wonCount + s.lostCount) > 0 ? s.wonCount / (s.wonCount + s.lostCount) : 0;
+    return s;
+  }
+
   var api = {
     num: num, isBlank: isBlank, vehicleRate: vehicleRate,
     loadedHourlyRate: loadedHourlyRate, pricedUp: pricedUp, decision: decision,
     computeLane: computeLane, computeWarehouse: computeWarehouse,
     computeLegs: computeLegs, computeSummary: computeSummary,
-    buildQuote: buildQuote
+    buildQuote: buildQuote,
+    computePipeline: computePipeline, tenderDueState: tenderDueState, daysUntil: daysUntil
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

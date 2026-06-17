@@ -70,6 +70,27 @@
     return { customer: "", contact: "", reference: "", quoteNumber: "", terms: "14 days from invoice" };
   }
 
+  var TENDER_STATUSES = ["Draft", "Submitted", "Shortlisted", "Won", "Lost", "No-bid"];
+
+  function newTender(seed) {
+    seed = seed || {};
+    return {
+      id: "t" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      reference: seed.reference || "",
+      customer: seed.customer || "",
+      title: seed.title || "",
+      status: seed.status || "Draft",
+      dueDate: seed.dueDate || "",
+      submittedDate: seed.submittedDate || "",
+      value: seed.value != null ? seed.value : "",
+      probability: seed.probability != null ? seed.probability : 50,
+      owner: seed.owner || "Jordan Brown",
+      notes: seed.notes || "",
+      snapshot: seed.snapshot || null,
+      updatedAt: new Date().toISOString().slice(0, 10)
+    };
+  }
+
   // lanes injected by the caller (from seed_lanes.json)
   function defaultState(seedLanes) {
     return {
@@ -78,7 +99,8 @@
       lanes: (seedLanes || []).map(function (l) { return Object.assign({}, l); }),
       accounts: defaultAccounts(),
       legBuilder: defaultLegBuilder(),
-      quote: defaultQuote()
+      quote: defaultQuote(),
+      tenders: []
     };
   }
 
@@ -90,6 +112,8 @@
     defaultLegBuilder: defaultLegBuilder,
     defaultQuote: defaultQuote,
     defaultState: defaultState,
+    newTender: newTender,
+    TENDER_STATUSES: TENDER_STATUSES,
     VEHICLES: ["Ute", "Rigid", "Semi", "Bdouble"]
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

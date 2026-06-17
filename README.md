@@ -19,6 +19,20 @@ against its live values (see `tests/`).
 | **Leg Builder** | Break a complex trip into legs (yard/load/drive/unload/return) and see the live trip price. |
 | **Summary** | Whole-portfolio rollup: transport + warehousing + combined, weekly/annual revenue, GP and blended margin. |
 | **Quote** | Flag lanes/accounts with **Quote? = Y**, fill customer details, and **Generate Quote PDF** — saved as `JDT_Quote_<Customer>_<#>_<date>.pdf` and opened automatically. |
+| **Tenders** | Tender-management register with a status pipeline (Draft / Submitted / Shortlisted / Won / Lost / No-bid), **capture the current priced model as a tender and reload it later**, a dashboard (open / weighted / won value, win-rate, due-soon & overdue), and due-date highlighting (amber ≤14 days, red overdue). |
+
+## Exports
+
+An **Export** menu (top bar) writes files next to the app and opens them:
+
+| Export | Output |
+|--------|--------|
+| Full model → Excel | `JDT_Model_<date>.xlsx` — Settings, Lanes, Warehousing, Summary, Tenders with all computed columns |
+| Data tables → PDF | `JDT_Data_<date>.pdf` — printable Lanes + Warehousing working data |
+| Quote → Excel | `JDT_Quote_<Customer>_<date>.xlsx` — the customer quote as a spreadsheet (alongside the PDF) |
+| Tender register → Excel / PDF | `JDT_Tenders_<date>.xlsx` / `.pdf` — all tenders plus pipeline totals |
+
+Exports use the same numbers shown on screen (the UI posts computed rows; the backend only formats them), so they can never drift from the app.
 
 The **Reset** button (top-right) clears all pricing inputs and restores Settings
 defaults, keeping lane and customer names as the template — exactly like the
@@ -66,8 +80,9 @@ state and rendering the PDF, so the two can never drift.
 ## Tests
 
 ```bash
-node tests/test_engine.js                       # engine vs. workbook values
-PYTHONPATH=. python tests/test_backend.py       # API + PDF generation
+node tests/test_engine.js                       # engine vs. workbook values + pipeline math
+PYTHONPATH=. python tests/test_backend.py       # API + quote PDF generation
+PYTHONPATH=. python tests/test_exports.py       # Excel + PDF exporters
 ```
 
 ## Project layout
