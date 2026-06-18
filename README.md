@@ -80,6 +80,31 @@ Margin %     = (price − cost) ÷ price
 Decision     = GO (≥ target) · REVIEW (within 8 pts) · NO-GO (below)
 ```
 
+### Per-tonne banded pricing
+
+For tenders quoted on $/tonne (rather than flat or hourly), the engine derives a
+banded rate card from each lane's FTL prices and bills every load at the floor or
+the band rate, whichever is higher — ported 1:1 from the Simplot workbook's
+*Methodology* §5 and *Per-Tonne Analysis* tabs:
+
+```
+FTL Single   = lane priced on a Semi   (FTL Rigid = same trip on a Rigid)
+Min Charge   = ROUND(FTL Rigid × 0.85)              ← floor for sub-tonne loads
+Band $/t     = FTL ÷ anchor   (0-5/5-10/10-14 → Rigid · 14t+ → Semi)
+Billed $     = MAX(Min Charge, band $/t × actual tonnes)
+```
+
+Two anchoring methods are selectable per quote:
+
+| Method | Anchor | Formula | When |
+|--------|--------|---------|------|
+| **A** | band ceiling | FTL ÷ {5, 10, 14, 22} | Current Simplot v3 rate card (reproduces it exactly) |
+| **B** | band midpoint | FTL ÷ {2.5, 7.5, 12, 18} | Proposed — recovers truck cost at the *typical* load (median ≈ midpoint, not ceiling) |
+
+`engine.js` exposes `bandRates()`, `bandForTonnes()`, `quoteTonnage()` and
+`computeLaneBands()`; all four are validated against the workbook's published
+values in `tests/test_bands.js`.
+
 ## Getting the executable
 
 ### Option A — download from CI (no setup)

@@ -83,6 +83,70 @@
     };
   }
 
+  // ---- per-tonne banded pricing -------------------------------------------
+  // Ported from the workbook "Methodology" §5 and the "Per-Tonne Analysis" tab.
+  // Per-tonne rates are derived from a lane's FTL prices, then a load is billed
+  // at MAX(Min Charge, band $/t × actual tonnes).
+  //
+  // Two anchoring methods (selectable):
+  //   A — ceiling-anchored (current Simplot v3 rate card): FTL ÷ band ceiling.
+  //   B — midpoint-anchored (proposed): FTL ÷ band midpoint. Defensible because
+  //       real median loads cluster near band midpoints, not ceilings.
+  // 0-5 / 5-10 / 10-14 bands ride a Rigid; the 14t+ band rides a Semi.
+  var BAND_DIVISORS = {
+    A: { t0_5: 5,   t5_10: 10,  t10_14: 14, t14: 22 },  // FTL ÷ band ceiling
+    B: { t0_5: 2.5, t5_10: 7.5, t10_14: 12, t14: 18 }   // FTL ÷ band midpoint
+  };
+
+  function round2(n) { return Math.round(num(n) * 100) / 100; }
+
+  // Min Charge + four band $/t from a lane's FTL Single (Semi) and FTL Rigid.
+  // FTL values round to whole dollars (rate-card convention); $/t to 2dp.
+  function bandRates(ftlSemi, ftlRigid, method) {
+    var m = String(method || "A").toUpperCase();
+    var d = BAND_DIVISORS[m] || BAND_DIVISORS.A;
+    var semi = Math.round(num(ftlSemi)), rigid = Math.round(num(ftlRigid));
+    return {
+      method: m, ftlSingle: semi, ftlRigid: rigid,
+      minCharge: Math.round(rigid * 0.85),   // floor for sub-tonne loads
+      t0_5: round2(rigid / d.t0_5),
+      t5_10: round2(rigid / d.t5_10),
+      t10_14: round2(rigid / d.t10_14),
+      t14: round2(semi / d.t14)
+    };
+  }
+
+  // Which band a load falls in, and its $/t. Edges: (0,5], (5,10], (10,14], (14,∞).
+  function bandForTonnes(tonnes, rates) {
+    var t = num(tonnes);
+    if (t <= 5)  return { band: "0-5t",   rate: num(rates.t0_5) };
+    if (t <= 10) return { band: "5-10t",  rate: num(rates.t5_10) };
+    if (t <= 14) return { band: "10-14t", rate: num(rates.t10_14) };
+    return { band: "14t+", rate: num(rates.t14) };
+  }
+
+  // Quote one load: billed = MAX(Min Charge, band $/t × tonnes).
+  function quoteTonnage(tonnes, rates) {
+    var t = num(tonnes), b = bandForTonnes(t, rates);
+    var tierCalc = b.rate * t;
+    var min = num(rates.minCharge);
+    var quoted = Math.max(min, tierCalc);
+    return {
+      tonnes: t, band: b.band, bandRate: b.rate,
+      tierCalc: tierCalc, quoted: quoted,
+      // true when the Min Charge floor is what's actually billed (band rate didn't bite)
+      minChargeApplied: tierCalc < min
+    };
+  }
+
+  // Full band table for a lane, computed live from settings. FTL Semi and FTL
+  // Rigid are the same trip priced on each vehicle (matches the workbook build).
+  function computeLaneBands(lane, s, method) {
+    var semi  = computeLane(Object.assign({}, lane, { vehicle: "semi" }),  s).base;
+    var rigid = computeLane(Object.assign({}, lane, { vehicle: "rigid" }), s).base;
+    return bandRates(semi, rigid, method);
+  }
+
   // ---- warehousing account -------------------------------------------------
   function computeWarehouse(acc, w) {
     var pallets = num(acc.pallets);
@@ -309,7 +373,10 @@
     computeLegs: computeLegs, computeSummary: computeSummary,
     buildQuote: buildQuote,
     computePipeline: computePipeline, tenderDueState: tenderDueState, daysUntil: daysUntil,
-    priceOpLane: priceOpLane, computeTender: computeTender
+    priceOpLane: priceOpLane, computeTender: computeTender,
+    BAND_DIVISORS: BAND_DIVISORS, round2: round2, bandRates: bandRates,
+    bandForTonnes: bandForTonnes, quoteTonnage: quoteTonnage,
+    computeLaneBands: computeLaneBands
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
