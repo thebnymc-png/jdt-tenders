@@ -71,9 +71,9 @@
     if (wsSet["A1"]) wsSet["A1"].s = { font: { bold: true, sz: 14, color: { rgb: NAVY_HEX } } };
     X_.utils.book_append_sheet(wb, wsSet, "Settings");
     // Lanes
-    var laneHead = ["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Hrs/trip", "Km/trip", "Tonnes/trip", "Tolls $", "Overnight $", "Load extras $", "Cost/trip $", "Base price $", "Price+FL $", "$/tonne", "Margin %", "Annual rev $", "Annual GP $", "Decision", "Quote?"];
+    var laneHead = ["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Hrs/trip", "Km/trip", "Tonnes/trip", "Tolls $", "Overnight $", "Load extras $", "Cost/trip $", "Base price $", "Price+FL $", "$/tonne", "$/kg", "Margin %", "Annual rev $", "Annual GP $", "Decision", "Quote?"];
     var laneRows = (p.lanes || []).map(function (L) {
-      return [L.origin, L.dest, L.vehicle, num(L.spaces), num(L.trips), num(L.hrs), num(L.km), num(L.tonnes), num(L.tolls), num(L.overnight), num(L.loadExtras), L.cost, L.base, L.priceFL, L.perTonne, L.margin, L.annualRev, L.annualGP, L.decision, L.quote];
+      return [L.origin, L.dest, L.vehicle, num(L.spaces), num(L.trips), num(L.hrs), num(L.km), num(L.tonnes), num(L.tolls), num(L.overnight), num(L.loadExtras), L.cost, L.base, L.priceFL, L.perTonne, L.perKg, L.margin, L.annualRev, L.annualGP, L.decision, L.quote];
     });
     var wsL = aoaSheet([laneHead].concat(laneRows)); styleHeader(wsL);
     applyFormats(wsL, { 11: MONEY, 12: MONEY, 13: MONEY, 14: MONEY, 15: PCT, 16: MONEY0, 17: MONEY0 });
@@ -266,8 +266,8 @@
       txt(doc, "TRANSPORT LANES", L, y, { color: NAVY, bold: true, size: 11 });
       doc.autoTable({
         startY: y + 2, margin: { left: L, right: L },
-        head: [["Origin", "Destination", "Veh", "Sp", "Trips", "Hrs", "Km", "Tonnes", "Cost", "Base", "Price+FL", "$/tonne", "Marg", "Ann rev", "Ann GP", "Dec"]],
-        body: p.lanes.map(function (L2) { return [L2.origin, L2.dest, L2.vehicle, n0(L2.spaces), n0(L2.trips), n0(L2.hrs), n0(L2.km), num(L2.tonnes) > 0 ? n0(L2.tonnes) : "—", money(L2.cost, 2), money(L2.base, 2), money(L2.priceFL, 2), num(L2.tonnes) > 0 ? money(L2.perTonne, 2) : "—", pct(L2.margin), money(L2.annualRev), money(L2.annualGP), L2.decision]; }),
+        head: [["Origin", "Destination", "Veh", "Sp", "Trips", "Hrs", "Km", "Tonnes", "Cost", "Base", "Price+FL", "$/tonne", "$/kg", "Marg", "Ann rev", "Ann GP", "Dec"]],
+        body: p.lanes.map(function (L2) { return [L2.origin, L2.dest, L2.vehicle, n0(L2.spaces), n0(L2.trips), n0(L2.hrs), n0(L2.km), num(L2.tonnes) > 0 ? n0(L2.tonnes) : "—", money(L2.cost, 2), money(L2.base, 2), money(L2.priceFL, 2), num(L2.tonnes) > 0 ? money(L2.perTonne, 2) : "—", num(L2.tonnes) > 0 ? ("$" + (num(L2.perKg)).toFixed(3)) : "—", pct(L2.margin), money(L2.annualRev), money(L2.annualGP), L2.decision]; }),
         theme: "grid", styles: { fontSize: 7.2, cellPadding: 1.2, lineColor: LINE }, headStyles: { fillColor: NAVY, textColor: 255 }, alternateRowStyles: { fillColor: ICE }
       });
       y = doc.lastAutoTable.finalY + 8;

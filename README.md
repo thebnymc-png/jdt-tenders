@@ -120,6 +120,15 @@ distribution) and a **Method A vs B** revenue comparison on your actual load
 distribution — the evidence that drives the v1→v2 decision.
 `engine.js` exposes `analyseShipments(shipments, lanes, settings)`.
 
+### Unit rate equivalents
+
+Every lane's base price is also expressed across the full suite of quoting bases
+so you can respond on whatever basis a tender asks for: **flat** (per trip),
+**per pallet**, **per tonne**, **per kg**, and **per km**. The Per-Tonne tab shows
+a *Unit rate equivalents* table, the Leg Builder shows them as KPIs, and the
+Excel/PDF exports carry a `$/kg` column. `engine.js` exposes `perKg`/`perKgFL`
+and `perKm`/`perKmFL` alongside the existing `perSpace`/`perTonne`/`perHour`.
+
 ### Day Rate vs LineHaul
 
 Labour is priced on the **Day Rate** for round trips at or under the LineHaul

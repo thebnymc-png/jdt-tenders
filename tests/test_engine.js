@@ -31,6 +31,14 @@ approx(lr.base, lr.cost/(1-0.18), 1e-6, "lane base");
 approx(lr.priceFL, lr.base*1.12, 1e-6, "lane price+FL");
 console.log("lane decision:", lr.decision, "(margin", Math.round(lr.margin*1000)/10+"%)");
 
+// Unit rate equivalents — per kg / per km derived from base & price+FL
+const laneU = {origin:"A",dest:"B",vehicle:"Semi",spaces:14,trips:1,hrs:4,km:200,tonnes:10};
+const ur = E.computeLane(laneU, s);
+approx(ur.perKg, ur.base/(10*1000), 1e-9, "per kg = base/(t*1000)");
+approx(ur.perKgFL, ur.priceFL/(10*1000), 1e-9, "per kg +FL");
+approx(ur.perKg, ur.perTonne/1000, 1e-9, "per kg == per tonne / 1000");
+approx(ur.perKm, ur.base/200, 1e-9, "per km = base/km");
+
 // Warehouse account
 const w = S.defaultWarehousing();
 const acc = {customer:"Acme",pallets:100,inb:50,outb:60,cases:200,vasHrs:5,other:0,quote:"Y"};

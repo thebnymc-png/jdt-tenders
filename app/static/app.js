@@ -589,6 +589,7 @@
         sRows + "</tbody></table></div>");
     }
 
+    var equiv = unitEquivHtml(priced, s);
     var ship = shipmentAnalysisHtml(t, s, priced);
 
     var comp = "", withFreq = loads.filter(function (x) { return x.freq > 0; });
@@ -603,7 +604,25 @@
         { k: "Annualised uplift", v: fmtMoney((wkB - wkA) * 52), s: "over 52 weeks", cls: "good" }
       ]) + "</div>";
     }
-    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + ship + aiCardHtml(priced.length) + "</div>";
+    return '<div class="tw-pane">' + toggle + comp + rateCard + equiv + sanity + ship + aiCardHtml(priced.length) + "</div>";
+  }
+
+  // Full suite of pricing bases for each lane — the same base price expressed
+  // as flat / per pallet / per tonne / per kg / per km (all excl. fuel levy).
+  function unitEquivHtml(priced, s) {
+    if (!priced.length) return "";
+    function m(v) { return v > 0 ? fmtMoney2(v) : "—"; }
+    function mkg(v) { return v > 0 ? "$" + v.toFixed(3) : "—"; }
+    var rows = priced.map(function (x) {
+      var r = E.computeLane(x.l, s);
+      return "<tr><td class='txt'>" + laneLabel(x.l) + "</td><td class='calc'>" + m(r.base) +
+        "</td><td class='calc'>" + m(r.perSpace) + "</td><td class='calc'>" + m(r.perTonne) +
+        "</td><td class='calc'>" + mkg(r.perKg) + "</td><td class='calc'>" + m(r.perKm) + "</td></tr>";
+    }).join("");
+    return card("Unit rate equivalents",
+      "The same base price expressed every way (excl. fuel levy) — quote on whichever basis the tender asks for. Per pallet/tonne/kg need a load; per km needs distance.",
+      "<div class='grid-wrap'><table class='pgrid'><thead><tr><th class='l'>Lane</th><th>Flat / trip</th><th>Per pallet</th><th>Per tonne</th><th>Per kg</th><th>Per km</th></tr></thead><tbody>" +
+      rows + "</tbody></table></div>");
   }
 
   // AI-assisted rationale — posts the engine-computed figures to the Pages
@@ -1356,6 +1375,9 @@
       { k: "Base price", v: fmtMoney2(r.base), s: "excl. fuel levy" },
       { k: "Per pallet space", v: fmtMoney2(r.perSpace), s: E.num(lb.spaces) + " spaces" },
       { k: "Per hour", v: fmtMoney2(r.perHour), s: r.totalHours + " hrs" },
+      { k: "Per tonne", v: r.perTonne > 0 ? fmtMoney2(r.perTonne) : "—", s: E.num(lb.tonnes) + " t" },
+      { k: "Per kg", v: r.perKg > 0 ? "$" + r.perKg.toFixed(3) : "—", s: "by weight" },
+      { k: "Per km", v: r.perKm > 0 ? fmtMoney2(r.perKm) : "—", s: r.totalKm + " km" },
       { k: "Annual revenue", v: fmtMoney(r.annualRev), s: E.num(lb.trips) + " trips/wk", cls: "good" },
       { k: "Annual GP", v: fmtMoney(r.annualGP), s: "gross profit", cls: "good" }
     ]);
@@ -1428,7 +1450,7 @@
   function laneExportRows(lanes) {
     return lanes.map(function (l) {
       var r = E.computeLane(l, state.settings);
-      return { origin: l.origin || "", dest: l.dest || "", vehicle: l.vehicle || "", spaces: E.num(l.spaces), trips: E.num(l.trips), hrs: E.num(l.hrs), km: E.num(l.km), tonnes: E.num(l.tonnes), tolls: E.num(l.tolls), overnight: E.num(l.overnight), loadExtras: E.num(l.loadExtras), cost: r.cost, base: r.base, priceFL: r.priceFL, perTonne: r.perTonneFL, margin: r.margin, annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: l.quote || "" };
+      return { origin: l.origin || "", dest: l.dest || "", vehicle: l.vehicle || "", spaces: E.num(l.spaces), trips: E.num(l.trips), hrs: E.num(l.hrs), km: E.num(l.km), tonnes: E.num(l.tonnes), tolls: E.num(l.tolls), overnight: E.num(l.overnight), loadExtras: E.num(l.loadExtras), cost: r.cost, base: r.base, priceFL: r.priceFL, perTonne: r.perTonneFL, perKg: r.perKgFL, margin: r.margin, annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: l.quote || "" };
     });
   }
   function accountExportRows(accs) {

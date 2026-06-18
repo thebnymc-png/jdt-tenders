@@ -77,6 +77,10 @@
     var tonnes = num(lane.tonnes);
     var perTonne = tonnes > 0 ? base / tonnes : 0;
     var perTonneFL = tonnes > 0 ? priceFL / tonnes : 0;
+    var perKg = tonnes > 0 ? base / (tonnes * 1000) : 0;
+    var perKgFL = tonnes > 0 ? priceFL / (tonnes * 1000) : 0;
+    var perKm = km > 0 ? base / km : 0;
+    var perKmFL = km > 0 ? priceFL / km : 0;
     var annualRev = priceFL * trips * 52;
     var annualGP = (priceFL - cost) * trips * 52;
 
@@ -92,6 +96,7 @@
       extras: extras, cost: cost, base: base, priceFL: priceFL,
       margin: margin, perSpace: perSpace, perHour: perHour,
       tonnes: tonnes, perTonne: perTonne, perTonneFL: perTonneFL,
+      perKg: perKg, perKgFL: perKgFL, perKm: perKm, perKmFL: perKmFL,
       annualRev: annualRev, annualGP: annualGP, decision: dec
     };
   }
@@ -276,6 +281,8 @@
       perSpace: spaces > 0 ? base / spaces : 0,
       perHour: totalHours > 0 ? base / totalHours : 0,
       tonnes: tonnes, perTonne: tonnes > 0 ? base / tonnes : 0, perTonneFL: tonnes > 0 ? priceFL / tonnes : 0,
+      perKg: tonnes > 0 ? base / (tonnes * 1000) : 0, perKgFL: tonnes > 0 ? priceFL / (tonnes * 1000) : 0,
+      perKm: totalKm > 0 ? base / totalKm : 0, perKmFL: totalKm > 0 ? priceFL / totalKm : 0,
       annualRev: priceFL * trips * 52,
       annualGP: (priceFL - cost) * trips * 52
     };
