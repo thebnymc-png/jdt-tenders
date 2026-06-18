@@ -420,12 +420,12 @@
   }
   var LANE_COLS_HTML =
     '<colgroup><col style="width:80px"><col style="width:130px"><col style="width:80px"><col style="width:130px">' +
-    '<col style="width:70px"><col style="width:80px"><col style="width:120px"><col style="width:64px"><col style="width:120px"><col style="width:96px">' +
+    '<col style="width:70px"><col style="width:80px"><col style="width:72px"><col style="width:120px"><col style="width:64px"><col style="width:120px"><col style="width:96px">' +
     '<col style="width:72px"><col style="width:70px"><col style="width:74px">' +
-    '<col style="width:88px"><col style="width:90px"><col style="width:74px"><col style="width:88px"><col style="width:100px"><col style="width:40px"></colgroup>' +
+    '<col style="width:88px"><col style="width:90px"><col style="width:88px"><col style="width:74px"><col style="width:88px"><col style="width:100px"><col style="width:40px"></colgroup>' +
     '<thead><tr><th class="l">Coll PC</th><th class="l">Coll suburb</th><th class="l">Del PC</th><th class="l">Del suburb</th>' +
-    '<th>Pallets</th><th>Weight kg</th><th class="l">Dims</th><th class="l">Stack</th><th class="l">Loading</th><th class="l">Vehicle</th>' +
-    '<th>Freq/wk</th><th>Hrs</th><th>Km</th><th>Cost/trip</th><th>Rate+FL</th><th>Margin</th><th>Decision</th><th>Annual $</th><th></th></tr></thead>';
+    '<th>Pallets</th><th>Weight kg</th><th>Tonnes</th><th class="l">Dims</th><th class="l">Stack</th><th class="l">Loading</th><th class="l">Vehicle</th>' +
+    '<th>Freq/wk</th><th>Hrs</th><th>Km</th><th>Cost/trip</th><th>Rate+FL</th><th>$/tonne</th><th>Margin</th><th>Decision</th><th>Annual $</th><th></th></tr></thead>';
   function opLaneRowHtml(l, s) {
     var r = E.priceOpLane(l, s);
     function inp(f) { return '<input data-ln="' + l.id + '" data-lf="' + f + '" value="' + esc(l[f]) + '" inputmode="decimal">'; }
@@ -434,10 +434,11 @@
     return '<tr class="row-' + (r.decision || "none") + '" data-lrow="' + l.id + '">' +
       '<td class="txt">' + txt("collPostcode") + '</td><td class="txt">' + txt("collSuburb") + '</td>' +
       '<td class="txt">' + txt("delPostcode") + '</td><td class="txt">' + txt("delSuburb") + '</td>' +
-      "<td>" + inp("pallets") + "</td><td>" + inp("weightKg") + '</td><td class="txt">' + txt("dims") + "</td>" +
+      "<td>" + inp("pallets") + "</td><td>" + inp("weightKg") + "</td><td>" + inp("tonnes") + '</td><td class="txt">' + txt("dims") + "</td>" +
       '<td class="txt">' + sel("stackable", ["Y", "N"]) + '</td><td class="txt">' + sel("loadingType", Seed.LOADING_TYPES) + '</td><td class="txt">' + sel("vehicle", Seed.VEHICLES) + "</td>" +
       "<td>" + inp("freq") + "</td><td>" + inp("hrs") + "</td><td>" + inp("km") + "</td>" +
       '<td class="calc">' + fmtMoney2(r.cost) + '</td><td class="calc">' + fmtMoney2(r.priceFL) + "</td>" +
+      '<td class="calc">' + (r.tonnes > 0 ? fmtMoney2(r.perTonneFL) : "—") + "</td>" +
       '<td class="calc">' + (r.decision ? fmtPct(r.margin) : "—") + "</td>" +
       '<td class="calc cell-dec dec-' + (r.decision || "") + '">' + (r.decision || "—") + "</td>" +
       '<td class="calc">' + fmtMoney(r.annualRev) + "</td>" +
@@ -450,16 +451,17 @@
       '<button class="btn" data-import><svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg> Import from Excel</button>' +
       '<span class="tw-count">' + n + " lane" + (n === 1 ? "" : "s") + " · priced by the cost engine</span></div>" +
       '<div class="grid-wrap"><table class="pgrid" id="tenderLanes">' + LANE_COLS_HTML + "<tbody>" +
-      (rows || '<tr><td colspan="19" class="empty">No lanes yet. Add one or import from Excel.</td></tr>') +
+      (rows || '<tr><td colspan="21" class="empty">No lanes yet. Add one or import from Excel.</td></tr>') +
       "</tbody></table></div>";
   }
   function recalcOpLaneRow(t, l) {
     var tr = el("tenderLanes") && el("tenderLanes").querySelector('tr[data-lrow="' + l.id + '"]'); if (!tr) return;
     var r = E.priceOpLane(l, state.settings), c = tr.querySelectorAll("td.calc");
     c[0].textContent = fmtMoney2(r.cost); c[1].textContent = fmtMoney2(r.priceFL);
-    c[2].textContent = r.decision ? fmtPct(r.margin) : "—";
-    c[3].textContent = r.decision || "—"; c[3].className = "calc cell-dec dec-" + (r.decision || "");
-    c[4].textContent = fmtMoney(r.annualRev); tr.className = "row-" + (r.decision || "none");
+    c[2].textContent = r.tonnes > 0 ? fmtMoney2(r.perTonneFL) : "—";
+    c[3].textContent = r.decision ? fmtPct(r.margin) : "—";
+    c[4].textContent = r.decision || "—"; c[4].className = "calc cell-dec dec-" + (r.decision || "");
+    c[5].textContent = fmtMoney(r.annualRev); tr.className = "row-" + (r.decision || "none");
   }
   function volStats(t) {
     var ship = t.volumeHistory.map(function (v) { return E.num(v.shipments); });
@@ -669,7 +671,8 @@
     ["delPostcode", "Delivery postcode", ["delivery postcode", "del postcode", "del pc", "destination postcode", "drop postcode", "to postcode"]],
     ["delSuburb", "Delivery suburb/town", ["delivery suburb", "del suburb", "delivery town", "destination suburb", "drop suburb"]],
     ["pallets", "Pallets", ["pallet", "spaces", "units", "qty"]],
-    ["weightKg", "Weight (kg)", ["weight", "mass"]],
+    ["weightKg", "Weight (kg)", ["weight", "mass", "kg"]],
+    ["tonnes", "Tonnes / trip", ["tonne", "tonnage", "tons", "mt"]],
     ["dims", "Dimensions", ["dimension", "dims", "lxwxh", "size"]],
     ["stackable", "Stackable", ["stackable", "stack"]],
     ["loadingType", "Loading type", ["loading", "load type", "handling"]],
@@ -998,9 +1001,10 @@
       '<td class="txt"><input class="txt" data-lane="' + idx + '" data-f="origin" value="' + esc(lane.origin) + '"></td>' +
       '<td class="txt"><input class="txt" data-lane="' + idx + '" data-f="dest" value="' + esc(lane.dest) + '"></td>' +
       '<td class="txt"><select data-lane="' + idx + '" data-f="vehicle">' + veh + '</select></td>' +
-      "<td>" + inp("spaces") + "</td><td>" + inp("trips") + "</td><td>" + inp("hrs") + "</td><td>" + inp("km") + "</td>" +
+      "<td>" + inp("spaces") + "</td><td>" + inp("trips") + "</td><td>" + inp("hrs") + "</td><td>" + inp("km") + "</td><td>" + inp("tonnes") + "</td>" +
       "<td>" + inp("tolls") + "</td><td>" + inp("overnight") + "</td><td>" + inp("loadExtras") + "</td>" +
       '<td class="calc">' + fmtMoney2(r.cost) + "</td><td class=\"calc\">" + fmtMoney2(r.base) + "</td><td class=\"calc\">" + fmtMoney2(r.priceFL) + "</td>" +
+      '<td class="calc">' + (r.tonnes > 0 ? fmtMoney2(r.perTonneFL) : "—") + "</td>" +
       '<td class="calc">' + (r.decision ? fmtPct(r.margin) : "—") + "</td>" +
       '<td class="calc">' + fmtMoney(r.annualRev) + "</td><td class=\"calc\">" + fmtMoney(r.annualGP) + "</td>" +
       '<td class="calc cell-dec dec-' + (r.decision || "") + '">' + (r.decision || "—") + "</td>" +
@@ -1013,14 +1017,15 @@
       if (f && !((lane.origin || "") + " " + (lane.dest || "") + " " + (lane.vehicle || "")).toLowerCase().includes(f)) return;
       html += laneRowHtml(lane, i);
     });
-    body.innerHTML = html || '<tr><td colspan="19" class="empty">No lanes match the filter.</td></tr>';
+    body.innerHTML = html || '<tr><td colspan="21" class="empty">No lanes match the filter.</td></tr>';
   }
   function recalcLaneRow(idx) {
     var tr = el("lanesBody").querySelector('tr[data-row="' + idx + '"]'); if (!tr) return;
     var r = E.computeLane(state.lanes[idx], state.settings), c = tr.querySelectorAll("td.calc");
     c[0].textContent = fmtMoney2(r.cost); c[1].textContent = fmtMoney2(r.base); c[2].textContent = fmtMoney2(r.priceFL);
-    c[3].textContent = r.decision ? fmtPct(r.margin) : "—"; c[4].textContent = fmtMoney(r.annualRev); c[5].textContent = fmtMoney(r.annualGP);
-    c[6].textContent = r.decision || "—"; c[6].className = "calc cell-dec dec-" + (r.decision || ""); tr.className = "row-" + (r.decision || "none");
+    c[3].textContent = r.tonnes > 0 ? fmtMoney2(r.perTonneFL) : "—";
+    c[4].textContent = r.decision ? fmtPct(r.margin) : "—"; c[5].textContent = fmtMoney(r.annualRev); c[6].textContent = fmtMoney(r.annualGP);
+    c[7].textContent = r.decision || "—"; c[7].className = "calc cell-dec dec-" + (r.decision || ""); tr.className = "row-" + (r.decision || "none");
   }
   function bindLanes() {
     var body = el("lanesBody");
@@ -1035,7 +1040,7 @@
     });
     el("laneSearch").addEventListener("input", function () { laneFilter = this.value; renderLanes(); });
     el("btnAddLane").addEventListener("click", function () {
-      state.lanes.unshift({ origin: "", dest: "", vehicle: "Rigid", spaces: "", trips: "", hrs: "", km: "", tolls: "", overnight: "", loadExtras: "", quote: "" });
+      state.lanes.unshift({ origin: "", dest: "", vehicle: "Rigid", spaces: "", trips: "", hrs: "", km: "", tonnes: "", tolls: "", overnight: "", loadExtras: "", quote: "" });
       laneFilter = ""; el("laneSearch").value = ""; renderLanes(); markDirty();
     });
   }
@@ -1148,9 +1153,9 @@
     var q = E.buildQuote(state), html = "";
     html += '<div class="qsection"><h3>Transport — Linehaul &amp; Metro Lanes</h3>';
     if (q.transport.length) {
-      html += '<table><thead><tr><th>Origin</th><th>Destination</th><th>Vehicle</th><th>Spaces</th><th>Trips/wk</th><th>Rate/trip</th><th>Weekly $</th><th>Annual $</th></tr></thead><tbody>';
-      q.transport.forEach(function (r) { html += "<tr><td>" + esc(r.origin) + "</td><td>" + esc(r.dest) + "</td><td>" + esc(r.vehicle) + "</td><td>" + fmtNum(r.spaces) + "</td><td>" + fmtNum(r.trips) + "</td><td>" + fmtMoney2(r.ratePerTrip) + "</td><td>" + fmtMoney2(r.weekly) + "</td><td>" + fmtMoney(r.annual) + "</td></tr>"; });
-      html += "</tbody><tfoot><tr><td colspan='6'>Transport subtotal</td><td>" + fmtMoney2(q.transportWeekly) + "</td><td>" + fmtMoney(q.transportAnnual) + "</td></tr></tfoot></table>";
+      html += '<table><thead><tr><th>Origin</th><th>Destination</th><th>Vehicle</th><th>Spaces</th><th>Trips/wk</th><th>Tonnes</th><th>$/tonne</th><th>Rate/trip</th><th>Weekly $</th><th>Annual $</th></tr></thead><tbody>';
+      q.transport.forEach(function (r) { html += "<tr><td>" + esc(r.origin) + "</td><td>" + esc(r.dest) + "</td><td>" + esc(r.vehicle) + "</td><td>" + fmtNum(r.spaces) + "</td><td>" + fmtNum(r.trips) + "</td><td>" + (r.tonnes ? fmtNum(r.tonnes) : "—") + "</td><td>" + (r.tonnes ? fmtMoney2(r.ratePerTonne) : "—") + "</td><td>" + fmtMoney2(r.ratePerTrip) + "</td><td>" + fmtMoney2(r.weekly) + "</td><td>" + fmtMoney(r.annual) + "</td></tr>"; });
+      html += "</tbody><tfoot><tr><td colspan='8'>Transport subtotal</td><td>" + fmtMoney2(q.transportWeekly) + "</td><td>" + fmtMoney(q.transportAnnual) + "</td></tr></tfoot></table>";
     } else html += '<p class="empty">No transport lanes flagged. Set Quote? = Y on the Lanes view.</p>';
     html += "</div><div class=\"qsection\"><h3>Warehousing — Storage, Handling &amp; VAS</h3>";
     if (q.warehousing.length) {
@@ -1178,7 +1183,7 @@
   function laneExportRows(lanes) {
     return lanes.map(function (l) {
       var r = E.computeLane(l, state.settings);
-      return { origin: l.origin || "", dest: l.dest || "", vehicle: l.vehicle || "", spaces: E.num(l.spaces), trips: E.num(l.trips), hrs: E.num(l.hrs), km: E.num(l.km), tolls: E.num(l.tolls), overnight: E.num(l.overnight), loadExtras: E.num(l.loadExtras), cost: r.cost, base: r.base, priceFL: r.priceFL, margin: r.margin, annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: l.quote || "" };
+      return { origin: l.origin || "", dest: l.dest || "", vehicle: l.vehicle || "", spaces: E.num(l.spaces), trips: E.num(l.trips), hrs: E.num(l.hrs), km: E.num(l.km), tonnes: E.num(l.tonnes), tolls: E.num(l.tolls), overnight: E.num(l.overnight), loadExtras: E.num(l.loadExtras), cost: r.cost, base: r.base, priceFL: r.priceFL, perTonne: r.perTonneFL, margin: r.margin, annualRev: r.annualRev, annualGP: r.annualGP, decision: r.decision, quote: l.quote || "" };
     });
   }
   function accountExportRows(accs) {

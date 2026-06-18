@@ -51,7 +51,7 @@
 
   function defaultLegBuilder() {
     return {
-      vehicle: "Rigid", spaces: 22, trips: 5,
+      vehicle: "Rigid", spaces: 22, trips: 5, tonnes: "",
       tolls: 0, overnight: 0, loadExtras: 0,
       legs: [
         { label: "Yard prep", type: "yard", hours: 0.5, km: 0 },
@@ -93,7 +93,7 @@
       id: uid("l"),
       collPostcode: v("collPostcode"), collSuburb: v("collSuburb"),
       delPostcode: v("delPostcode"), delSuburb: v("delSuburb"),
-      pallets: v("pallets"), weightKg: v("weightKg"), dims: v("dims"),
+      pallets: v("pallets"), weightKg: v("weightKg"), tonnes: v("tonnes"), dims: v("dims"),
       stackable: v("stackable", "Y"), loadingType: v("loadingType", "Tail-lift"),
       vehicle: v("vehicle", "Rigid"), freq: v("freq"),
       hrs: v("hrs"), km: v("km"), tolls: v("tolls"), overnight: v("overnight"), loadExtras: v("loadExtras")

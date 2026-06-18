@@ -71,13 +71,13 @@
     if (wsSet["A1"]) wsSet["A1"].s = { font: { bold: true, sz: 14, color: { rgb: NAVY_HEX } } };
     X_.utils.book_append_sheet(wb, wsSet, "Settings");
     // Lanes
-    var laneHead = ["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Hrs/trip", "Km/trip", "Tolls $", "Overnight $", "Load extras $", "Cost/trip $", "Base price $", "Price+FL $", "Margin %", "Annual rev $", "Annual GP $", "Decision", "Quote?"];
+    var laneHead = ["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Hrs/trip", "Km/trip", "Tonnes/trip", "Tolls $", "Overnight $", "Load extras $", "Cost/trip $", "Base price $", "Price+FL $", "$/tonne", "Margin %", "Annual rev $", "Annual GP $", "Decision", "Quote?"];
     var laneRows = (p.lanes || []).map(function (L) {
-      return [L.origin, L.dest, L.vehicle, num(L.spaces), num(L.trips), num(L.hrs), num(L.km), num(L.tolls), num(L.overnight), num(L.loadExtras), L.cost, L.base, L.priceFL, L.margin, L.annualRev, L.annualGP, L.decision, L.quote];
+      return [L.origin, L.dest, L.vehicle, num(L.spaces), num(L.trips), num(L.hrs), num(L.km), num(L.tonnes), num(L.tolls), num(L.overnight), num(L.loadExtras), L.cost, L.base, L.priceFL, L.perTonne, L.margin, L.annualRev, L.annualGP, L.decision, L.quote];
     });
     var wsL = aoaSheet([laneHead].concat(laneRows)); styleHeader(wsL);
-    applyFormats(wsL, { 10: MONEY, 11: MONEY, 12: MONEY, 13: PCT, 14: MONEY0, 15: MONEY0 });
-    wsL["!cols"] = cols([18, 18, 9, 8, 8, 8, 8, 9, 10, 11, 11, 11, 11, 9, 12, 12, 9, 7]); wsL["!freeze"] = { ySplit: 1 };
+    applyFormats(wsL, { 11: MONEY, 12: MONEY, 13: MONEY, 14: MONEY, 15: PCT, 16: MONEY0, 17: MONEY0 });
+    wsL["!cols"] = cols([18, 18, 9, 8, 8, 8, 8, 9, 9, 10, 11, 11, 11, 11, 9, 9, 12, 12, 9, 7]); wsL["!freeze"] = { ySplit: 1 };
     X_.utils.book_append_sheet(wb, wsL, "Lanes");
     // Warehousing
     var whHead = ["Customer", "Pallets", "Inb/wk", "Outb/wk", "Cases/wk", "VAS hrs/wk", "Other $/wk", "Cost/wk $", "Base $/wk", "Margin %", "$/pallet", "Annual rev $", "Annual GP $", "Decision", "Quote?"];
@@ -135,9 +135,9 @@
     var trStart = aoa.length;
     if ((c.transport || []).length) {
       aoa.push(["TRANSPORT — LINEHAUL & METRO LANES"]);
-      aoa.push(["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Rate/trip", "Weekly $", "Annual $"]);
-      c.transport.forEach(function (r) { aoa.push([r.origin, r.dest, r.vehicle, num(r.spaces), num(r.trips), r.ratePerTrip, r.weekly, r.annual]); });
-      aoa.push(["Transport subtotal", "", "", "", "", "", c.transportWeekly, c.transportAnnual]); aoa.push([]);
+      aoa.push(["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Tonnes", "$/tonne", "Rate/trip", "Weekly $", "Annual $"]);
+      c.transport.forEach(function (r) { aoa.push([r.origin, r.dest, r.vehicle, num(r.spaces), num(r.trips), num(r.tonnes), num(r.tonnes) > 0 ? r.ratePerTonne : "", r.ratePerTrip, r.weekly, r.annual]); });
+      aoa.push(["Transport subtotal", "", "", "", "", "", "", "", c.transportWeekly, c.transportAnnual]); aoa.push([]);
     }
     if ((c.warehousing || []).length) {
       aoa.push(["WAREHOUSING — STORAGE, HANDLING & VAS"]);
@@ -146,7 +146,7 @@
       aoa.push(["Warehousing subtotal", "", "", "", "", "", c.warehousingWeekly, c.warehousingAnnual]); aoa.push([]);
     }
     aoa.push(["TOTAL CONTRACT VALUE", "", "", "", "", "", c.totalWeekly, c.totalAnnual]);
-    var ws = aoaSheet(aoa); ws["!cols"] = cols([24, 16, 12, 10, 10, 12, 12, 12]);
+    var ws = aoaSheet(aoa); ws["!cols"] = cols([24, 16, 12, 10, 10, 9, 12, 9, 12, 12]);
     if (ws["A1"]) ws["A1"].s = { font: { bold: true, sz: 14, color: { rgb: NAVY_HEX } } };
     X_.utils.book_append_sheet(wb, ws, "Quote");
     var cust = safe(q.customer || "Quote");
@@ -157,21 +157,22 @@
 
   function importTemplate() {
     var X_ = X(), wb = X_.utils.book_new();
-    var head = ["Collection postcode", "Collection suburb", "Delivery postcode", "Delivery suburb", "Pallets", "Weight (kg)", "Dimensions (LxWxH)", "Stackable (Y/N)", "Loading type", "Vehicle", "Frequency per week", "Hours per trip", "Km per trip"];
+    var head = ["Collection postcode", "Collection suburb", "Delivery postcode", "Delivery suburb", "Pallets", "Weight (kg)", "Tonnes per trip", "Dimensions (LxWxH)", "Stackable (Y/N)", "Loading type", "Vehicle", "Frequency per week", "Hours per trip", "Km per trip"];
     var ex = [
-      ["4110", "Acacia Ridge", "4116", "Sunnybank", 6, 420, "1.2x1.0x1.6", "Y", "Tail-lift", "Rigid", 5, 4, 60],
-      ["4110", "Acacia Ridge", "4350", "Toowoomba", 22, 9000, "Std pallet", "Y", "Forklift", "Semi", 3, 9, 130]
+      ["4110", "Acacia Ridge", "4116", "Sunnybank", 6, 420, 0.42, "1.2x1.0x1.6", "Y", "Tail-lift", "Rigid", 5, 4, 60],
+      ["4110", "Acacia Ridge", "4350", "Toowoomba", 22, 9000, 9, "Std pallet", "Y", "Forklift", "Semi", 3, 9, 130]
     ];
     var ws = aoaSheet([head].concat(ex)); styleHeader(ws);
-    ws["!cols"] = cols([16, 16, 14, 14, 8, 10, 16, 13, 14, 9, 17, 13, 11]); ws["!freeze"] = { ySplit: 1 };
+    ws["!cols"] = cols([16, 16, 14, 14, 8, 10, 13, 16, 13, 14, 9, 17, 13, 11]); ws["!freeze"] = { ySplit: 1 };
     X_.utils.book_append_sheet(wb, ws, "Tender Lanes");
     var notes = [["JDT Tender Lane Import Template"], [],
       ["1. One row per lane on 'Tender Lanes' (overwrite or delete the examples)."],
       ["2. Keep the header row so the importer maps columns automatically."],
       ["3. Postcodes/suburbs are used to plot the lane network on the map (needs internet)."],
       ["4. Pricing fields: Pallets, Vehicle, Frequency per week, Hours per trip, Km per trip."],
-      ["5. Operational-only: Weight, Dimensions, Stackable, Loading type."],
-      ["6. In the app: open a tender → Operational Lanes → Import from Excel → upload this file."],
+      ["5. Tonnes per trip is optional — fill it to see a derived $/tonne rate on each lane (falls back to Weight kg ÷ 1000)."],
+      ["6. Operational-only: Weight, Dimensions, Stackable, Loading type."],
+      ["7. In the app: open a tender → Operational Lanes → Import from Excel → upload this file."],
       [], ["Vehicle options:  Ute, Rigid, Semi, Bdouble"],
       ["Loading options:  Tail-lift, Dock / Ramp, Forklift, Hand unload, Crane, Side-loader"]];
     var wsN = aoaSheet(notes); wsN["!cols"] = cols([100]);
@@ -213,12 +214,12 @@
     if ((c.transport || []).length) {
       doc.autoTable({
         startY: startY, margin: { left: L, right: 15 },
-        head: [["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Rate/trip", "Weekly $", "Annual $"]],
-        body: c.transport.map(function (r) { return [r.origin, r.dest, r.vehicle, n0(r.spaces), n0(r.trips), money(r.ratePerTrip, 2), money(r.weekly, 2), money(r.annual)]; }),
-        foot: [["Transport subtotal", "", "", "", "", "", money(c.transportWeekly, 2), money(c.transportAnnual)]],
+        head: [["Origin", "Destination", "Vehicle", "Spaces", "Trips/wk", "Tonnes", "$/tonne", "Rate/trip", "Weekly $", "Annual $"]],
+        body: c.transport.map(function (r) { return [r.origin, r.dest, r.vehicle, n0(r.spaces), n0(r.trips), num(r.tonnes) > 0 ? n0(r.tonnes) : "—", num(r.tonnes) > 0 ? money(r.ratePerTonne, 2) : "—", money(r.ratePerTrip, 2), money(r.weekly, 2), money(r.annual)]; }),
+        foot: [["Transport subtotal", "", "", "", "", "", "", "", money(c.transportWeekly, 2), money(c.transportAnnual)]],
         theme: "grid", styles: { fontSize: 8, cellPadding: 1.6, lineColor: LINE }, headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
         footStyles: { fillColor: [240, 244, 248], textColor: [20, 30, 45], fontStyle: "bold" }, alternateRowStyles: { fillColor: ICE },
-        columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } }
+        columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" } }
       });
       startY = doc.lastAutoTable.finalY + 6;
     }
@@ -265,8 +266,8 @@
       txt(doc, "TRANSPORT LANES", L, y, { color: NAVY, bold: true, size: 11 });
       doc.autoTable({
         startY: y + 2, margin: { left: L, right: L },
-        head: [["Origin", "Destination", "Veh", "Sp", "Trips", "Hrs", "Km", "Cost", "Base", "Price+FL", "Marg", "Ann rev", "Ann GP", "Dec"]],
-        body: p.lanes.map(function (L2) { return [L2.origin, L2.dest, L2.vehicle, n0(L2.spaces), n0(L2.trips), n0(L2.hrs), n0(L2.km), money(L2.cost, 2), money(L2.base, 2), money(L2.priceFL, 2), pct(L2.margin), money(L2.annualRev), money(L2.annualGP), L2.decision]; }),
+        head: [["Origin", "Destination", "Veh", "Sp", "Trips", "Hrs", "Km", "Tonnes", "Cost", "Base", "Price+FL", "$/tonne", "Marg", "Ann rev", "Ann GP", "Dec"]],
+        body: p.lanes.map(function (L2) { return [L2.origin, L2.dest, L2.vehicle, n0(L2.spaces), n0(L2.trips), n0(L2.hrs), n0(L2.km), num(L2.tonnes) > 0 ? n0(L2.tonnes) : "—", money(L2.cost, 2), money(L2.base, 2), money(L2.priceFL, 2), num(L2.tonnes) > 0 ? money(L2.perTonne, 2) : "—", pct(L2.margin), money(L2.annualRev), money(L2.annualGP), L2.decision]; }),
         theme: "grid", styles: { fontSize: 7.2, cellPadding: 1.2, lineColor: LINE }, headStyles: { fillColor: NAVY, textColor: 255 }, alternateRowStyles: { fillColor: ICE }
       });
       y = doc.lastAutoTable.finalY + 8;

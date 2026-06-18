@@ -61,6 +61,9 @@
     var spaces = num(lane.spaces), trips = num(lane.trips);
     var perSpace = spaces > 0 ? base / spaces : 0;
     var perHour = hrs > 0 ? base / hrs : 0;
+    var tonnes = num(lane.tonnes);
+    var perTonne = tonnes > 0 ? base / tonnes : 0;
+    var perTonneFL = tonnes > 0 ? priceFL / tonnes : 0;
     var annualRev = priceFL * trips * 52;
     var annualGP = (priceFL - cost) * trips * 52;
 
@@ -75,6 +78,7 @@
       loaded: loaded, veh: veh, labour: labour, fuelVeh: fuelVeh,
       extras: extras, cost: cost, base: base, priceFL: priceFL,
       margin: margin, perSpace: perSpace, perHour: perHour,
+      tonnes: tonnes, perTonne: perTonne, perTonneFL: perTonneFL,
       annualRev: annualRev, annualGP: annualGP, decision: dec
     };
   }
@@ -122,13 +126,14 @@
     var base = pricedUp(cost, s.targetMarginPct);
     var priceFL = base * (1 + num(s.fuelLevyPct) / 100);
     var margin = priceFL > 0 ? (priceFL - cost) / priceFL : 0;
-    var spaces = num(lb.spaces), trips = num(lb.trips);
+    var spaces = num(lb.spaces), trips = num(lb.trips), tonnes = num(lb.tonnes);
     return {
       totalHours: totalHours, totalKm: totalKm, loaded: loaded, veh: veh,
       labour: labour, fuelVeh: fuelVeh, extras: extras, cost: cost,
       base: base, priceFL: priceFL, margin: margin,
       perSpace: spaces > 0 ? base / spaces : 0,
       perHour: totalHours > 0 ? base / totalHours : 0,
+      tonnes: tonnes, perTonne: tonnes > 0 ? base / tonnes : 0, perTonneFL: tonnes > 0 ? priceFL / tonnes : 0,
       annualRev: priceFL * trips * 52,
       annualGP: (priceFL - cost) * trips * 52
     };
@@ -195,7 +200,8 @@
         transport.push({
           origin: lane.origin || "", dest: lane.dest || "",
           vehicle: lane.vehicle || "", spaces: num(lane.spaces),
-          trips: num(lane.trips), ratePerTrip: r.priceFL,
+          trips: num(lane.trips), tonnes: num(lane.tonnes), ratePerTonne: r.perTonneFL,
+          ratePerTrip: r.priceFL,
           weekly: r.priceFL * num(lane.trips),
           annual: r.priceFL * num(lane.trips) * 52
         });
@@ -227,23 +233,25 @@
   // ---- operational lane pricing (within a tender) --------------------------
   // Maps a tender's operational lane onto the lane shape the cost engine needs.
   function priceOpLane(l, s) {
+    // tonnes per trip: explicit field, else derived from operational weight (kg)
+    var tonnes = num(l.tonnes) || num(l.weightKg) / 1000;
     return computeLane({
       origin: l.collPostcode || l.collSuburb, dest: l.delPostcode || l.delSuburb,
-      vehicle: l.vehicle, spaces: l.pallets, trips: l.freq,
+      vehicle: l.vehicle, spaces: l.pallets, trips: l.freq, tonnes: tonnes,
       hrs: l.hrs, km: l.km, tolls: l.tolls, overnight: l.overnight, loadExtras: l.loadExtras
     }, s);
   }
   function computeTender(t, s) {
-    var wr = 0, wc = 0, go = 0, review = 0, nogo = 0, pallets = 0;
+    var wr = 0, wc = 0, go = 0, review = 0, nogo = 0, pallets = 0, tonnes = 0;
     (t.lanes || []).forEach(function (l) {
       var r = priceOpLane(l, s), freq = num(l.freq);
-      wr += r.priceFL * freq; wc += r.cost * freq; pallets += num(l.pallets) * freq;
+      wr += r.priceFL * freq; wc += r.cost * freq; pallets += num(l.pallets) * freq; tonnes += r.tonnes * freq;
       if (r.decision === "GO") go++; else if (r.decision === "REVIEW") review++; else if (r.decision === "NO-GO") nogo++;
     });
     return {
       weeklyRev: wr, weeklyCost: wc, weeklyGP: wr - wc, annualRev: wr * 52, annualGP: (wr - wc) * 52,
       margin: wr > 0 ? (wr - wc) / wr : 0, laneCount: (t.lanes || []).length,
-      go: go, review: review, nogo: nogo, totalPalletsWk: pallets
+      go: go, review: review, nogo: nogo, totalPalletsWk: pallets, totalTonnesWk: tonnes
     };
   }
 
