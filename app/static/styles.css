@@ -48,6 +48,15 @@ body.sb-collapsed{--sb-w:64px}
 .sb-head{display:flex;align-items:center;justify-content:space-between;height:var(--top-h);padding:0 12px 0 16px;border-bottom:1px solid var(--border)}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .logo{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--navy));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;letter-spacing:.5px;flex:none}
+.brand-logo{width:34px;height:34px;object-fit:contain;flex:none}
+
+/* launch splash ---------------------------------------------------------- */
+.splash{position:fixed;inset:0;z-index:300;background:#fff;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease}
+.splash.hide{opacity:0;pointer-events:none}
+.splash-inner{display:flex;flex-direction:column;align-items:center;gap:16px;animation:splashIn .6s ease both}
+.splash-logo{width:320px;max-width:64vw;height:auto}
+.splash-tag{font-size:14px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#26395B}
+@keyframes splashIn{from{opacity:0;filter:blur(12px);transform:scale(1.03)}to{opacity:1;filter:blur(0);transform:none}}
 .brand-text{min-width:0}
 .brand-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand-sub{font-size:11px;color:var(--text-3);white-space:nowrap}

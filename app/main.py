@@ -35,7 +35,7 @@ def main() -> None:
     try:
         import webview  # pywebview
         webview.create_window(
-            "JDT Pricing Model",
+            "JD Refrigerated — Tender Management Hub",
             url,
             width=1320, height=860, min_size=(1024, 680),
         )

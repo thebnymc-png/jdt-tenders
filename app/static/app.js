@@ -4,6 +4,21 @@
  */
 (function () {
   "use strict";
+
+  // ---- launch splash: fade out after 2s, or skip on click / keypress -------
+  (function () {
+    var splash = document.getElementById("splash"); if (!splash) return;
+    var done = false;
+    function hide() {
+      if (done) return; done = true;
+      splash.classList.add("hide");
+      setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 600);
+    }
+    setTimeout(hide, 2000);
+    splash.addEventListener("click", hide);
+    window.addEventListener("keydown", hide, { once: true });
+  })();
+
   var E = window.JDTEngine, Seed = window.JDTSeed;
   var state = null, seedLanes = [], saveTimer = null, laneFilter = "";
   var currentView = "active-tenders";
