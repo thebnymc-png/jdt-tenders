@@ -127,6 +127,19 @@ cutoff (default 250 km RT) and on the higher **LineHaul** rate beyond it, matchi
 the workbook's two-rate build. Both bases and the cutoff are editable in Settings;
 `engine.js` exposes `loadedDayRate()`, `loadedLineHaulRate()` and `rateForKm()`.
 
+### AI Analysis (in-app agent)
+
+The **AI Analysis** sidebar view is a self-contained tender assistant. Drop in an
+Excel/CSV file, type what you need — *answer questions, find data, present
+options, or set up a tender* — and the assistant either replies in text or
+**populates the app for you**. It shares the same Pages Function proxy
+(`kind:"agent"`); the model is given the workbook's headers and sample rows and
+returns tool calls (`create_tender`, `add_lanes_from_sheet`,
+`add_shipments_from_sheet`, `set_method`) that the browser applies against the
+**full** file it holds locally — so it only chooses the sheet + column mapping,
+never transcribes thousands of rows. Every change is listed back with a link to
+the affected tender.
+
 ### AI-assisted tender response
 
 The **Per-Tonne** tab can turn the verified figures into a procurement-ready

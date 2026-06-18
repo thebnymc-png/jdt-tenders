@@ -150,6 +150,7 @@
       case "active-tenders": renderActiveTenders(); break;
       case "tender": renderTender(); break;
       case "bid-analysis": renderBidAnalysis(); break;
+      case "ai-analysis": renderAiAnalysis(); break;
       case "settings": renderSettings(); break;
       case "lanes": renderLanes(); break;
       case "warehousing": renderWarehousing(); break;
@@ -1167,7 +1168,7 @@
 
   // ---- COMMAND PALETTE -----------------------------------------------------
   var NAV = [
-    ["active-tenders", "Active Tenders"], ["bid-analysis", "Bid Analysis"], ["settings", "Settings"],
+    ["active-tenders", "Active Tenders"], ["bid-analysis", "Bid Analysis"], ["ai-analysis", "AI Analysis"], ["settings", "Settings"],
     ["lanes", "Lanes"], ["warehousing", "Warehousing"], ["legbuilder", "Leg Builder"], ["quote", "Quote"],
     ["summary", "Portfolio"], ["carrier-network", "Carrier Network"], ["compliance", "Compliance"], ["reports", "Reports"]
   ];
@@ -1477,6 +1478,195 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = "toast"; }, 4000);
   }
 
+  // =========================================================================
+  // AI ANALYSIS — in-app agent: file + instruction -> answers / populated tender
+  // =========================================================================
+  var aiAgent = { workbook: null, fileName: "", running: false, result: null, target: "new", promptDraft: "" };
+
+  function renderAgentResult(r) {
+    if (!r) return "";
+    if (r.error) return '<div class="ai-err">' + esc(r.error) + "</div>";
+    var html = r.answer ? '<div class="ai-md">' + mdLite(r.answer) + "</div>" : "";
+    if (r.log && r.log.length) {
+      html += '<div class="aia-applied"><h4>Applied to your data</h4><ul>' +
+        r.log.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" +
+        (r.tenderId ? '<button class="btn btn-primary btn-sm" data-aiaopen="' + r.tenderId + '">Open tender →</button>' : "") + "</div>";
+    }
+    if (!r.answer && !(r.log && r.log.length)) html = '<div class="empty" style="padding:8px">No answer returned.</div>';
+    if (r.model) html += '<div class="ai-foot">' + esc(r.model) + " · review before relying on it.</div>";
+    return html;
+  }
+
+  function renderAiAnalysis() {
+    var b = el("aiaBody"); if (!b) return;
+    var wb = aiAgent.workbook;
+    var fileBody = wb
+      ? '<div class="aia-file"><div><b>' + esc(aiAgent.fileName) + "</b><span>" + wb.sheets.length + " sheet" + (wb.sheets.length === 1 ? "" : "s") + " · " +
+          fmtNum(wb.sheets.reduce(function (a, s) { return a + s.rowCount; }, 0)) + ' rows</span></div><button class="btn btn-sm" data-aiaclear>Replace</button></div>' +
+        '<div class="aia-sheets">' + wb.sheets.map(function (s) { return '<span class="aia-chip">' + esc(s.name) + " · " + fmtNum(s.rowCount) + "</span>"; }).join("") + "</div>"
+      : '<div class="aia-drop" id="aiaDrop"><svg viewBox="0 0 24 24" class="ico aia-dropico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg>' +
+        '<div>Drop an Excel/CSV file here, or <button class="linkbtn" data-aiapick>browse</button></div></div>';
+    var fileCard = card("1 · Upload a file", "A tender pack, a rate request, or a shipment export.", fileBody);
+
+    var chips = [
+      "Set up a new tender from this file",
+      "Load the shipment history for per-tonne analysis",
+      "Which destinations carry the most tonnes?",
+      "What share of loads fall below the Min Charge floor?",
+      "Summarise this tender and flag commercial risks"
+    ];
+    var promptCard = card("2 · Ask the assistant", "Answer questions, find data, present options — or populate the tender.",
+      '<textarea id="aiaPrompt" class="aia-prompt" rows="3" placeholder="e.g. Build a tender from the Rate Response sheet and load the QLD Regional shipments for analysis.">' + esc(aiAgent.promptDraft || "") + "</textarea>" +
+      '<div class="aia-chips">' + chips.map(function (c) { return '<button class="aia-ex" data-aiaex="' + esc(c) + '">' + esc(c) + "</button>"; }).join("") + "</div>" +
+      '<div class="aia-run-row"><label class="aia-target">Apply to <select id="aiaTarget"><option value="new">a new tender</option>' +
+        (currentTenderId ? '<option value="current"' + (aiAgent.target === "current" ? " selected" : "") + ">the open tender</option>" : "") + "</select></label>" +
+      '<button class="btn btn-primary" id="aiaRun"' + (wb && !aiAgent.running ? "" : " disabled") + ">" + (aiAgent.running ? "Working…" : "Run analysis") + "</button></div>");
+
+    var resultBody = aiAgent.running
+      ? '<div class="ai-busy">Thinking — reading the file and working on your request…</div>'
+      : (aiAgent.result ? renderAgentResult(aiAgent.result) : '<div class="empty" style="padding:8px">Results appear here.</div>');
+    b.innerHTML = '<div class="tw-pane">' + fileCard + promptCard + card("3 · Result", "", '<div id="aiaOut" class="ai-out">' + resultBody + "</div>") + "</div>";
+  }
+
+  // Compact view of the workbook to send (headers + capped sample rows).
+  function compactWorkbook(wb) {
+    var SAMPLE = 20;
+    return {
+      sheets: wb.sheets.map(function (s) {
+        var sample = s.rows.slice(0, SAMPLE).map(function (row) { var o = {}; s.headers.forEach(function (h, i) { o[h] = row[i]; }); return o; });
+        return { name: s.name, headers: s.headers, rowCount: s.rowCount, sampleRows: sample };
+      })
+    };
+  }
+  function aiaColIndex(headers, name) {
+    if (name == null || name === "") return -1;
+    var n = String(name).trim().toLowerCase();
+    for (var i = 0; i < headers.length; i++) if (String(headers[i]).trim().toLowerCase() === n) return i;
+    for (var j = 0; j < headers.length; j++) if (String(headers[j]).toLowerCase().indexOf(n) >= 0) return j;
+    return -1;
+  }
+  function aiaFindSheet(name) {
+    var wb = aiAgent.workbook; if (!wb) return null;
+    var n = String(name || "").trim().toLowerCase();
+    return wb.sheets.find(function (s) { return s.name.toLowerCase() === n; }) ||
+      wb.sheets.find(function (s) { return n && s.name.toLowerCase().indexOf(n) >= 0; }) || null;
+  }
+
+  // Apply the model's tool calls to state against the FULL local workbook.
+  function applyAgentActions(actions) {
+    var log = [], ctx = null;
+    if (aiAgent.target === "current" && currentTenderId) ctx = getTender(currentTenderId);
+    function ensureTender() {
+      if (!ctx) { ctx = Seed.newTender({}); normalizeTender(ctx); state.tenders.unshift(ctx); log.push("Created a new tender."); }
+      return ctx;
+    }
+    (actions || []).forEach(function (a) {
+      var inp = a.input || {};
+      if (a.name === "create_tender") {
+        if (ctx && aiAgent.target === "current") {
+          ["reference", "customer", "title", "dueDate", "owner", "notes"].forEach(function (k) { if (inp[k] != null && inp[k] !== "") ctx[k] = inp[k]; });
+          log.push("Updated tender details.");
+        } else {
+          ctx = Seed.newTender({ reference: inp.reference, customer: inp.customer, title: inp.title, dueDate: inp.dueDate, owner: inp.owner, notes: inp.notes });
+          normalizeTender(ctx); state.tenders.unshift(ctx);
+          log.push("Created tender" + (inp.customer ? " for " + inp.customer : "") + (inp.reference ? " (" + inp.reference + ")" : "") + ".");
+        }
+      } else if (a.name === "add_lanes_from_sheet") {
+        var sh = aiaFindSheet(inp.sheet); if (!sh) { log.push('Couldn\'t find a sheet matching "' + inp.sheet + '" for lanes.'); return; }
+        ensureTender();
+        var map = inp.mapping || {}, idx = {};
+        Object.keys(map).forEach(function (k) { idx[k] = aiaColIndex(sh.headers, map[k]); });
+        var added = 0;
+        sh.rows.forEach(function (row) {
+          var seed = {};
+          Object.keys(idx).forEach(function (k) { if (idx[k] >= 0) seed[k] = row[idx[k]]; });
+          if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) { ctx.lanes.push(Seed.newOpLane(seed)); added++; }
+        });
+        log.push("Added " + added + " lane" + (added === 1 ? "" : "s") + ' from "' + sh.name + '".');
+      } else if (a.name === "add_shipments_from_sheet") {
+        var s2 = aiaFindSheet(inp.sheet); if (!s2) { log.push('Couldn\'t find a sheet matching "' + inp.sheet + '" for shipments.'); return; }
+        ensureTender();
+        var di = aiaColIndex(s2.headers, inp.destColumn), pi = aiaColIndex(s2.headers, inp.postcodeColumn),
+            ti = aiaColIndex(s2.headers, inp.tonnesColumn), wi = aiaColIndex(s2.headers, inp.weightColumn);
+        var added2 = 0;
+        s2.rows.forEach(function (row) {
+          var dest = di >= 0 ? row[di] : "", pc = pi >= 0 ? row[pi] : "", tonnes = ti >= 0 ? row[ti] : "", weightKg = wi >= 0 ? row[wi] : "";
+          if (String(dest).trim() === "" && String(pc).trim() === "") return;
+          if (E.num(tonnes) <= 0 && E.num(weightKg) <= 0) return;
+          ctx.shipments.push({ dest: dest, postcode: pc, tonnes: tonnes, weightKg: weightKg }); added2++;
+        });
+        log.push("Loaded " + added2 + " shipment" + (added2 === 1 ? "" : "s") + ' from "' + s2.name + '".');
+      } else if (a.name === "set_method") {
+        ensureTender(); ctx.ptMethod = inp.method === "B" ? "B" : "A";
+        log.push("Set per-tonne method to " + ctx.ptMethod + ".");
+      }
+    });
+    if (ctx) { syncTenderValue(ctx); touchTender(ctx); markDirty(); }
+    return { log: log, tenderId: ctx ? ctx.id : null };
+  }
+
+  function runAgent() {
+    if (!aiAgent.workbook || aiAgent.running) return;
+    var prompt = (el("aiaPrompt") && el("aiaPrompt").value || "").trim();
+    if (!prompt) { toast("Type what you'd like the assistant to do.", true); return; }
+    aiAgent.promptDraft = prompt;
+    aiAgent.target = el("aiaTarget") ? el("aiaTarget").value : "new";
+    aiAgent.running = true; aiAgent.result = null; renderAiAnalysis();
+    var payload = { kind: "agent", prompt: prompt, target: aiAgent.target, workbook: compactWorkbook(aiAgent.workbook) };
+    fetch("/api/analyse", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        aiAgent.running = false;
+        if (!res.ok || !res.j || (!res.j.answer && !res.j.actions)) {
+          aiAgent.result = { error: (res.j && res.j.error) || "Analysis failed." }; renderAiAnalysis(); return;
+        }
+        var applied = applyAgentActions(res.j.actions || []);
+        aiAgent.result = { answer: res.j.answer || "", model: res.j.model, log: applied.log, tenderId: applied.tenderId };
+        if (applied.tenderId) save();
+        renderAiAnalysis();
+      })
+      .catch(function () {
+        aiAgent.running = false;
+        aiAgent.result = { error: "Could not reach the assistant. On a locked-down network the proxy host (api.anthropic.com) may be blocked, or the API key isn’t configured yet." };
+        renderAiAnalysis();
+      });
+  }
+
+  function aiaLoadFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { aiAgent.workbook = XP.parseWorkbook(reader.result); aiAgent.fileName = file.name; aiAgent.result = null; renderAiAnalysis(); }
+      catch (e) { toast("Could not read that file: " + e.message, true); }
+    };
+    reader.onerror = function () { toast("Could not read that file.", true); };
+    reader.readAsArrayBuffer(file);
+  }
+  function capturePrompt() { if (el("aiaPrompt")) aiAgent.promptDraft = el("aiaPrompt").value; }
+
+  function bindAiAnalysis() {
+    var body = el("aiaBody"); if (!body) return;
+    el("aiaFile").addEventListener("change", function () { if (this.files[0]) { capturePrompt(); aiaLoadFile(this.files[0]); this.value = ""; } });
+    body.addEventListener("click", function (e) {
+      if (e.target.closest("[data-aiapick]")) { el("aiaFile").click(); return; }
+      if (e.target.closest("[data-aiaclear]")) { capturePrompt(); aiAgent.workbook = null; aiAgent.fileName = ""; renderAiAnalysis(); return; }
+      var ex = e.target.closest("[data-aiaex]");
+      if (ex) { var ta = el("aiaPrompt"); if (ta) { ta.value = ex.dataset.aiaex; aiAgent.promptDraft = ta.value; ta.focus(); } return; }
+      if (e.target.closest("#aiaRun")) { runAgent(); return; }
+      var op = e.target.closest("[data-aiaopen]");
+      if (op) { openTender(op.dataset.aiaopen); return; }
+    });
+    body.addEventListener("input", function (e) { if (e.target.id === "aiaPrompt") aiAgent.promptDraft = e.target.value; });
+    body.addEventListener("change", function (e) { if (e.target.id === "aiaTarget") aiAgent.target = e.target.value; });
+    body.addEventListener("dragover", function (e) { if (el("aiaDrop")) { e.preventDefault(); el("aiaDrop").classList.add("over"); } });
+    body.addEventListener("dragleave", function (e) { if (el("aiaDrop")) el("aiaDrop").classList.remove("over"); });
+    body.addEventListener("drop", function (e) {
+      if (!el("aiaDrop")) return;
+      e.preventDefault(); el("aiaDrop").classList.remove("over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) { capturePrompt(); aiaLoadFile(e.dataTransfer.files[0]); }
+    });
+  }
+
   // ---- boot ----------------------------------------------------------------
   setupTheme();
   load().then(function () {
@@ -1484,6 +1674,7 @@
     bindSettings(); bindLanes(); bindWarehousing(); bindLegBuilder(); bindQuote();
     bindActiveTenders(); bindTenderWorkspace(); bindImport();
     bindCarriers(); bindCompliance(); bindReports(); bindExport(); bindReset();
+    bindAiAnalysis();
     gotoView("active-tenders");
   });
 })();

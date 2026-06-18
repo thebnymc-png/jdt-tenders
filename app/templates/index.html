@@ -42,6 +42,9 @@
       <button class="sb-item" data-view="bid-analysis">
         <svg viewBox="0 0 24 24" class="ico"><path d="M4 19V5M4 19h16M8 16v-5M13 16V8M18 16v-3"/></svg><span>Bid Analysis</span>
       </button>
+      <button class="sb-item" data-view="ai-analysis">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5l-1.4 1.4M7.9 16.1l-1.4 1.4m12 0l-1.4-1.4M7.9 7.9L6.5 6.5"/><circle cx="12" cy="12" r="3.5"/></svg><span>AI Analysis</span>
+      </button>
 
       <div class="sb-group">Pricing</div>
       <button class="sb-item" data-view="settings">
@@ -374,6 +377,12 @@
         <div class="view-head"><div><h1>Reports</h1><p class="sub">Generate documents next to the application — they open automatically.</p></div></div>
         <div class="report-grid" id="reportGrid"></div>
         <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+      </section>
+
+      <section class="view" id="view-ai-analysis">
+        <div class="view-head"><div><h1>AI Analysis</h1><p class="sub">Drop in a file, say what you need, and the assistant answers questions or populates the tender for you.</p></div></div>
+        <div id="aiaBody"></div>
+        <input type="file" id="aiaFile" accept=".xlsx,.xls,.csv" hidden>
       </section>
 
       <!-- TENDER WORKSPACE (full RFQ) ------------------------------------- -->
