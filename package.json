@@ -4,6 +4,7 @@
   "private": true,
   "description": "JD Refrigerated — Tender Management Hub (static web app)",
   "scripts": {
-    "build": "node scripts/build-web.js"
+    "build": "node scripts/build-web.js",
+    "zip": "node scripts/pack-zip.js"
   }
 }

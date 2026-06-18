@@ -24,6 +24,7 @@ Thumbs.db
 
 # Static web build output / web deps
 /public/
+/.deploy-zip/
 node_modules/
 
 # Cloudflare Pages local secrets (never commit the real key)

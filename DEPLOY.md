@@ -37,6 +37,24 @@ npm run build
 npx wrangler pages deploy public --project-name jdt-tender-hub
 ```
 
+## Option C — ZIP for dashboard upload (no CLI on the upload machine)
+
+For uploading from a locked-down machine that can't run Node/Wrangler, build the
+ZIP **once on any machine that has Node**, then drag it into the dashboard:
+
+```bash
+npm run zip        # -> jdt-tender-hub.zip  (static site + AI proxy)
+```
+
+Then: Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** →
+**Upload assets** → drop `jdt-tender-hub.zip`.
+
+The ZIP bundles a self-contained `_worker.js` (generated from
+`functions/api/analyse.js`), so the `/api/analyse` AI proxy works through a plain
+dashboard upload — which, unlike Git/Wrangler deploys, does **not** compile the
+`functions/` directory on its own. After the first upload, set the
+`ANTHROPIC_API_KEY` secret (below) to enable the AI button.
+
 ## Custom domain
 
 In the Pages project → **Custom domains** → add e.g. `tenders.jdrt.com.au`
