@@ -25,3 +25,7 @@ Thumbs.db
 # Static web build output / web deps
 /public/
 node_modules/
+
+# Generated deploy bundle
+/jdt-tender-hub.zip
+*.zip
