@@ -10,7 +10,8 @@
       driverBaseHourly: 39.44,
       otMultiplier: 1.0475,
       publicHolidayHourly: 91.06,
-      linehaulHourly: 42.5,
+      linehaulHourly: 60.2,        // LineHaul base $/hr (workbook: aligned to template build)
+      linehaulThresholdKm: 250,    // RT km cutoff: ≤ Day Rate, > LineHaul
       superRate: 0.12,
       workcoverRate: 0.06172,
       payrollTaxRate: 0.0495,

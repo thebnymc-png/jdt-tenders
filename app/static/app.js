@@ -126,6 +126,7 @@
     delete t.origin; delete t.destination; delete t.volume;
     t.lanes.forEach(function (l) { if (!l.id) l.id = Seed.newOpLane().id; });
     if (t.ptMethod !== "B") t.ptMethod = "A";  // per-tonne anchoring method
+    if (!Array.isArray(t.shipments)) t.shipments = [];  // raw shipment history
   }
 
   // ---- navigation ----------------------------------------------------------
@@ -587,6 +588,8 @@
         sRows + "</tbody></table></div>");
     }
 
+    var ship = shipmentAnalysisHtml(t, s, priced);
+
     var comp = "", withFreq = loads.filter(function (x) { return x.freq > 0; });
     if (withFreq.length) {
       var wkA = withFreq.reduce(function (a, x) { return a + E.quoteTonnage(x.t, x.bandsA).quoted * x.freq; }, 0);
@@ -599,7 +602,45 @@
         { k: "Annualised uplift", v: fmtMoney((wkB - wkA) * 52), s: "over 52 weeks", cls: "good" }
       ]) + "</div>";
     }
-    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + "</div>";
+    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + ship + "</div>";
+  }
+
+  // Shipment revenue simulation (Per-Tonne Analysis §3-§4) — groups raw
+  // shipment history by destination lane and simulates Method A vs B revenue.
+  function shipmentAnalysisHtml(t, s, priced) {
+    var n = (t.shipments || []).length;
+    var bar = '<div class="tw-toolbar"><button class="btn btn-primary" data-importships>' +
+      '<svg viewBox="0 0 24 24" class="ico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg> Import shipment history</button>' +
+      (n ? '<button class="btn" data-clearships>Clear ' + n + ' shipment' + (n === 1 ? "" : "s") + "</button>" : "") +
+      '<span class="tw-count">' + (n ? n + " shipment" + (n === 1 ? "" : "s") + " loaded" : "Upload a shipment export (destination + tonnage) to simulate billed revenue") + "</span></div>";
+    var body = "";
+    if (n) {
+      if (!priced.length) {
+        body = '<div class="empty" style="padding:16px">Add operational lanes with hours and distance so shipments can be matched to a rate card.</div>';
+      } else {
+        var a = E.analyseShipments(t.shipments, t.lanes, s);
+        var totals = '<div class="stat-strip pt-strip">' + kpiStripHtml([
+          { k: "Shipments priced", v: fmtNum(a.totals.n), s: a.unmatched.n ? (fmtNum(a.unmatched.n) + " unmatched") : "all matched to a lane" },
+          { k: "Revenue — Method A", v: fmtMoney(a.totals.revA), s: "ceiling-anchored" },
+          { k: "Revenue — Method B", v: fmtMoney(a.totals.revB), s: "midpoint-anchored", cls: "good" },
+          { k: "Uplift A → B", v: (a.totals.uplift >= 0 ? "+" : "") + fmtPct(a.totals.uplift), s: fmtMoney(a.totals.revB - a.totals.revA) + " total", cls: "good" }
+        ]) + "</div>";
+        var rows = a.rows.map(function (r) {
+          var b = r.bands;
+          return "<tr><td class='txt'>" + esc(r.dest) + "</td><td class='calc'>" + fmtNum(r.n) +
+            "</td><td class='calc'>" + fmtNum(Math.round(r.totalTonnes)) + "</td><td class='calc'>" + r.median.toFixed(2) +
+            "</td><td class='calc'>" + b["0-5t"] + " / " + b["5-10t"] + " / " + b["10-14t"] + " / " + b["14t+"] +
+            "</td><td class='calc'>" + fmtMoney(r.revA) + "</td><td class='calc'>" + fmtMoney(r.revB) +
+            "</td><td class='calc'>" + (r.uplift >= 0 ? "+" : "") + fmtPct(r.uplift) + "</td></tr>";
+        }).join("");
+        var table = "<div class='grid-wrap'><table class='pgrid'><thead><tr><th class='l'>Destination</th><th>Ships</th><th>Total t</th><th>Median t</th><th>Bands 0-5/5-10/10-14/14+</th><th>Method A</th><th>Method B</th><th>Uplift</th></tr></thead><tbody>" +
+          rows + "</tbody></table></div>";
+        body = totals + table;
+      }
+    }
+    return card("Shipment revenue simulation",
+      "Bills every historic shipment at MAX(Min Charge, band $/t × tonnes) and compares Method A vs B on your actual load distribution.",
+      bar + body);
   }
 
   function renderSection() {
@@ -672,6 +713,13 @@
       if (e.target.closest("[data-import]")) { openImport(); return; }
       var mb = e.target.closest("[data-ptmethod]");
       if (mb) { t.ptMethod = mb.dataset.ptmethod === "B" ? "B" : "A"; touchTender(t); renderSection(); markDirty(); return; }
+      if (e.target.closest("[data-importships]")) { openImport("shipments"); return; }
+      if (e.target.closest("[data-clearships]")) {
+        if (!t.shipments.length || confirm("Clear " + t.shipments.length + " imported shipments?")) {
+          t.shipments = []; touchTender(t); renderSection(); markDirty();
+        }
+        return;
+      }
       var ld = e.target.closest("[data-lanedel]");
       if (ld) { t.lanes = t.lanes.filter(function (y) { return y.id !== ld.dataset.lanedel; }); syncTenderValue(t); renderSection(); renderTenderKpis(t); markDirty(); return; }
       if (e.target.closest("[data-addbid]")) { t.bids.push(Seed.newBid({})); renderSection(); markDirty(); return; }
@@ -769,8 +817,9 @@
     }
     return -1;
   }
-  // mode "new"  -> Create New Tender (chooser, then build a tender from Excel)
-  // mode "lanes" -> add lanes to the open tender (from the workspace)
+  // mode "new"      -> Create New Tender (chooser, then build a tender from Excel)
+  // mode "lanes"     -> add lanes to the open tender (from the workspace)
+  // mode "shipments" -> load raw shipment history (destination + tonnage) for analysis
   var importMode = "lanes";
   function showImportStep(step) {  // "choose" | "file" | "map"
     el("importChoose").hidden = step !== "choose";
@@ -784,8 +833,8 @@
     importMode = mode || "lanes";
     importData = null;
     el("importModal").hidden = false;
-    el("importTitle").textContent = importMode === "new" ? "Create a tender" : "Import lanes from Excel";
-    el("importDo").textContent = importMode === "new" ? "Create tender" : "Import lanes";
+    el("importTitle").textContent = importMode === "new" ? "Create a tender" : importMode === "shipments" ? "Import shipment history" : "Import lanes from Excel";
+    el("importDo").textContent = importMode === "new" ? "Create tender" : importMode === "shipments" ? "Import shipments" : "Import lanes";
     el("importFile").value = ""; el("importStatus").textContent = "";
     ["impCustomer", "impReference", "impTitle", "impDue", "impOwner"].forEach(function (id) { el(id).value = ""; });
     showImportStep(importMode === "new" ? "choose" : "file");
@@ -816,6 +865,22 @@
       if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) lanes.push(Seed.newOpLane(seed));
     });
     return lanes;
+  }
+  // Build shipment rows {dest, postcode, tonnes, weightKg} from the mapped sheet.
+  function shipmentsFromMapping() {
+    var sheet = importData.sheets[parseInt(el("importSheet").value, 10)];
+    var map = {};
+    el("importMap").querySelectorAll("[data-imp]").forEach(function (sel) { map[sel.dataset.imp] = parseInt(sel.value, 10); });
+    var ships = [];
+    sheet.rows.forEach(function (row) {
+      function cell(k) { var ci = map[k]; return ci >= 0 ? row[ci] : ""; }
+      var dest = cell("delSuburb"), pc = cell("delPostcode");
+      var tonnes = cell("tonnes"), weightKg = cell("weightKg");
+      if (String(dest).trim() === "" && String(pc).trim() === "") return;
+      if (E.num(tonnes) <= 0 && E.num(weightKg) <= 0) return;
+      ships.push({ dest: dest, postcode: pc, tonnes: tonnes, weightKg: weightKg });
+    });
+    return ships;
   }
   function bindImport() {
     el("importClose").addEventListener("click", closeImport);
@@ -848,6 +913,15 @@
     el("importSheet").addEventListener("change", renderImportMapping);
     el("importDo").addEventListener("click", function () {
       if (!importData) return;
+      if (importMode === "shipments") {
+        var cur = getTender(currentTenderId); if (!cur) return;
+        var ships = shipmentsFromMapping();
+        cur.shipments = (cur.shipments || []).concat(ships);
+        touchTender(cur); save(); closeImport();
+        currentSection = "pertonne"; renderTender();
+        toast("Imported " + ships.length + " shipment" + (ships.length === 1 ? "" : "s") + ".");
+        return;
+      }
       var lanes = lanesFromMapping();
       if (importMode === "new") {
         var t = Seed.newTender({
@@ -1059,15 +1133,18 @@
   // =========================================================================
   // PRICING WORKSPACE (engine views) — unchanged calculation logic
   // =========================================================================
+  function loadedRateText() {
+    return "Day " + fmtMoney2(E.loadedDayRate(state.settings)) + " · LineHaul " + fmtMoney2(E.loadedLineHaulRate(state.settings));
+  }
   function renderSettings() {
     document.querySelectorAll("[data-set]").forEach(function (inp) { inp.value = state.settings[inp.dataset.set]; });
-    el("loadedRate").textContent = fmtMoney2(E.loadedHourlyRate(state.settings));
+    el("loadedRate").textContent = loadedRateText();
   }
   function bindSettings() {
     document.querySelectorAll("[data-set]").forEach(function (inp) {
       inp.addEventListener("input", function () {
         state.settings[inp.dataset.set] = inp.value === "" ? "" : parseFloat(inp.value);
-        el("loadedRate").textContent = fmtMoney2(E.loadedHourlyRate(state.settings)); markDirty();
+        el("loadedRate").textContent = loadedRateText(); markDirty();
       });
     });
   }

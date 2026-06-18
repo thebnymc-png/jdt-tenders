@@ -27,11 +27,24 @@
   }
 
   // Loaded $/hr = base * OT * (1+super) * (1 + workcover + payroll)
-  function loadedHourlyRate(s) {
-    return num(s.driverBaseHourly) * num(s.otMultiplier) *
+  function loadedFromBase(base, s) {
+    return num(base) * num(s.otMultiplier) *
       (1 + num(s.superRate)) *
       (1 + num(s.workcoverRate) + num(s.payrollTaxRate));
   }
+  // Day Rate (short/metro runs) and LineHaul (long runs) loaded $/hr.
+  function loadedDayRate(s) { return loadedFromBase(s.driverBaseHourly, s); }
+  function loadedLineHaulRate(s) {
+    var lh = num(s.linehaulHourly);
+    return lh > 0 ? loadedFromBase(lh, s) : loadedDayRate(s);  // fall back to day rate
+  }
+  // Day Rate for RT ≤ threshold km, else LineHaul (workbook: 250km cutoff).
+  function rateForKm(km, s) {
+    var thr = num(s.linehaulThresholdKm) || 250;
+    return num(km) > thr ? loadedLineHaulRate(s) : loadedDayRate(s);
+  }
+  // Back-compat alias — the Day Rate (Settings view + legacy callers).
+  function loadedHourlyRate(s) { return loadedDayRate(s); }
 
   // Base price from cost + target margin (guard: margin >= 100% => price = cost)
   function pricedUp(cost, targetPct) {
@@ -48,9 +61,9 @@
 
   // ---- transport lane ------------------------------------------------------
   function computeLane(lane, s) {
-    var loaded = loadedHourlyRate(s);
-    var veh = vehicleRate(lane.vehicle, s);
     var hrs = num(lane.hrs), km = num(lane.km);
+    var loaded = rateForKm(km, s);            // Day Rate ≤250km RT, else LineHaul
+    var veh = vehicleRate(lane.vehicle, s);
     var labour = hrs * loaded;
     var fuelVeh = km * veh;
     var extras = num(lane.tolls) + num(lane.overnight) + num(lane.loadExtras);
@@ -147,6 +160,71 @@
     return bandRates(semi, rigid, method);
   }
 
+  // ---- shipment-level analysis (Per-Tonne Analysis §3-§4) -----------------
+  // Groups raw shipments by the lane that serves their destination, buckets
+  // them into bands, and simulates billed revenue under Method A vs B.
+  function median(arr) {
+    if (!arr.length) return 0;
+    var a = arr.slice().sort(function (x, y) { return x - y; }), m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+  }
+  function normKey(v) { return String(v == null ? "" : v).trim().toLowerCase(); }
+  function shipTonnes(sh) { return num(sh.tonnes) || num(sh.weightKg) / 1000; }
+
+  function analyseShipments(shipments, lanes, s) {
+    var bySuburb = {}, byPc = {};
+    (lanes || []).forEach(function (l) {
+      var su = normKey(l.delSuburb), pc = normKey(l.delPostcode);
+      if (su && !bySuburb[su]) bySuburb[su] = l;
+      if (pc && !byPc[pc]) byPc[pc] = l;
+    });
+    function matchLane(sh) {
+      var d = normKey(sh.dest), pc = normKey(sh.postcode);
+      if (pc && byPc[pc]) return byPc[pc];
+      if (d && bySuburb[d]) return bySuburb[d];
+      if (d) { for (var k in bySuburb) { if (k && (d.indexOf(k) >= 0 || k.indexOf(d) >= 0)) return bySuburb[k]; } }
+      return null;
+    }
+    var groups = {}, order = [], unmatched = { n: 0, tonnes: 0 };
+    (shipments || []).forEach(function (sh) {
+      var t = shipTonnes(sh);
+      if (t <= 0) return;
+      var lane = matchLane(sh);
+      if (!lane) { unmatched.n++; unmatched.tonnes += t; return; }
+      var key = lane.id || (normKey(lane.delSuburb) + "|" + normKey(lane.delPostcode));
+      if (!groups[key]) {
+        groups[key] = { lane: lane, tonnes: [], bandsA: computeLaneBands(lane, s, "A"), bandsB: computeLaneBands(lane, s, "B") };
+        order.push(key);
+      }
+      groups[key].tonnes.push(t);
+    });
+    var rows = order.map(function (key) {
+      var g = groups[key], revA = 0, revB = 0, bands = { "0-5t": 0, "5-10t": 0, "10-14t": 0, "14t+": 0 };
+      g.tonnes.forEach(function (t) {
+        revA += quoteTonnage(t, g.bandsA).quoted;
+        revB += quoteTonnage(t, g.bandsB).quoted;
+        bands[bandForTonnes(t, g.bandsA).band]++;
+      });
+      return {
+        dest: g.lane.delSuburb || g.lane.delPostcode || "—",
+        n: g.tonnes.length,
+        totalTonnes: g.tonnes.reduce(function (a, x) { return a + x; }, 0),
+        median: median(g.tonnes), bands: bands, minCharge: g.bandsA.minCharge,
+        revA: revA, revB: revB, uplift: revA > 0 ? (revB - revA) / revA : 0
+      };
+    });
+    var totA = rows.reduce(function (a, r) { return a + r.revA; }, 0);
+    var totB = rows.reduce(function (a, r) { return a + r.revB; }, 0);
+    return {
+      rows: rows, unmatched: unmatched,
+      totals: {
+        n: rows.reduce(function (a, r) { return a + r.n; }, 0),
+        totalTonnes: rows.reduce(function (a, r) { return a + r.totalTonnes; }, 0),
+        revA: totA, revB: totB, uplift: totA > 0 ? (totB - totA) / totA : 0
+      }
+    };
+  }
+
   // ---- warehousing account -------------------------------------------------
   function computeWarehouse(acc, w) {
     var pallets = num(acc.pallets);
@@ -181,7 +259,7 @@
       totalHours += num(leg.hours);
       totalKm += num(leg.km);
     });
-    var loaded = loadedHourlyRate(s);
+    var loaded = rateForKm(totalKm, s);       // Day Rate ≤250km, else LineHaul
     var veh = vehicleRate(lb.vehicle, s);
     var labour = totalHours * loaded;
     var fuelVeh = totalKm * veh;
@@ -368,7 +446,9 @@
 
   var api = {
     num: num, isBlank: isBlank, vehicleRate: vehicleRate,
-    loadedHourlyRate: loadedHourlyRate, pricedUp: pricedUp, decision: decision,
+    loadedHourlyRate: loadedHourlyRate, loadedDayRate: loadedDayRate,
+    loadedLineHaulRate: loadedLineHaulRate, rateForKm: rateForKm,
+    pricedUp: pricedUp, decision: decision,
     computeLane: computeLane, computeWarehouse: computeWarehouse,
     computeLegs: computeLegs, computeSummary: computeSummary,
     buildQuote: buildQuote,
@@ -376,7 +456,7 @@
     priceOpLane: priceOpLane, computeTender: computeTender,
     BAND_DIVISORS: BAND_DIVISORS, round2: round2, bandRates: bandRates,
     bandForTonnes: bandForTonnes, quoteTonnage: quoteTonnage,
-    computeLaneBands: computeLaneBands
+    computeLaneBands: computeLaneBands, median: median, analyseShipments: analyseShipments
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

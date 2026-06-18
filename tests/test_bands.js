@@ -99,5 +99,48 @@ eq(scBands.ftlSingle, 1059, "SC live FTL Single (Semi)");
 eq(scBands.ftlRigid, 891, "SC live FTL Rigid");
 approx(scBands.t14, 48.14, 0.005, "SC live 14t+"); // 1059/22
 
+// --- 5. Day Rate vs LineHaul selection by RT km ----------------------------
+const sLH = Object.assign({}, s, { linehaulHourly: 60.2, linehaulThresholdKm: 250 });
+approx(E.loadedDayRate(sLH), 51.41726950976, 1e-9, "Day Rate $/hr");
+approx(E.loadedLineHaulRate(sLH), 78.4817349008, 1e-9, "LineHaul $/hr");
+approx(E.rateForKm(142, sLH), 51.41726950976, 1e-9, "142km RT -> Day Rate");
+approx(E.rateForKm(250, sLH), 51.41726950976, 1e-9, "250km RT -> Day Rate (edge)");
+approx(E.rateForKm(256, sLH), 78.4817349008, 1e-9, "256km RT -> LineHaul");
+
+// Toowoomba (RT 256km, 5.3 hrs, $24 tolls) must price on LineHaul → FTL 1523/1309.
+const twLane = { origin: "Brisbane", dest: "Toowoomba", spaces: 14, trips: 1, hrs: 5.3, km: 256, tolls: 24 };
+const twBuilt = E.computeLaneBands(twLane, sLH, "A");
+eq(twBuilt.ftlSingle, 1523, "Toowoomba live FTL Single (LineHaul)");
+eq(twBuilt.ftlRigid, 1309, "Toowoomba live FTL Rigid (LineHaul)");
+
+// Gympie (RT 360km, 6.1 hrs, $16 tolls) — LineHaul → FTL 1935/1635.
+const gyLane = { origin: "Brisbane", dest: "Gympie", spaces: 14, trips: 1, hrs: 6.1, km: 360, tolls: 16 };
+const gyBuilt = E.computeLaneBands(gyLane, sLH, "A");
+eq(gyBuilt.ftlSingle, 1935, "Gympie live FTL Single (LineHaul)");
+eq(gyBuilt.ftlRigid, 1635, "Gympie live FTL Rigid (LineHaul)");
+
+// --- 6. Shipment analysis: grouping, banding, Method A vs B simulation -----
+const lanes = [
+  { id: "gc", delSuburb: "Gold Coast", hrs: 3.7, km: 142, tolls: 30 },   // Day Rate
+  { id: "tw", delSuburb: "Toowoomba", hrs: 5.3, km: 256, tolls: 24 }     // LineHaul
+];
+const shipments = [
+  { dest: "Gold Coast", tonnes: 1.87 },   // 0-5t, floors
+  { dest: "Gold Coast", tonnes: 6.5 },    // 5-10t
+  { dest: "Gold Coast", tonnes: 20.6 },   // 14t+
+  { dest: "Toowoomba", weightKg: 17100 }, // 17.1t -> 14t+
+  { dest: "Roma", tonnes: 5 }             // unmatched (no lane)
+];
+const an = E.analyseShipments(shipments, lanes, sLH);
+eq(an.rows.length, 2, "analysis: two matched destinations");
+eq(an.unmatched.n, 1, "analysis: one unmatched shipment");
+const gcRow = an.rows.find(r => r.dest === "Gold Coast");
+eq(gcRow.n, 3, "GC group: 3 shipments");
+eq(gcRow.bands["0-5t"], 1, "GC group: one 0-5t load");
+eq(gcRow.bands["14t+"], 1, "GC group: one 14t+ load");
+if (!(an.totals.revB >= an.totals.revA)) { console.error("FAIL Method B >= A total"); fail++; }
+else console.log("ok   Method B total >= A:", Math.round(an.totals.revA), "->", Math.round(an.totals.revB));
+console.log("     uplift A->B:", (an.totals.uplift * 100).toFixed(1) + "%");
+
 console.log(fail ? ("\n" + fail + " FAILURES") : "\nALL BAND TESTS PASSED");
 process.exit(fail ? 1 : 0);

@@ -74,6 +74,7 @@ workbook's reset macro.
 
 ```
 Loaded $/hr  = base × OT × (1 + super) × (1 + workcover + payroll)
+             ↳ Day Rate (RT ≤ cutoff km) · LineHaul (RT > cutoff, default 250km)
 Labour cost  = total hours × loaded $/hr
 Fuel/veh     = total km × vehicle $/km
 Base cost    = labour + fuel/veh + tolls + overnight + loading extras
@@ -107,6 +108,24 @@ Two anchoring methods are selectable per quote:
 `engine.js` exposes `bandRates()`, `bandForTonnes()`, `quoteTonnage()` and
 `computeLaneBands()`; all four are validated against the workbook's published
 values in `tests/test_bands.js`.
+
+### Shipment revenue simulation
+
+Import a raw shipment export (destination + tonnage) on a tender's **Per-Tonne**
+tab and the engine groups it by the lane serving each destination, buckets the
+loads into bands, and bills every consignment at the floor-or-rate rule —
+reproducing the workbook's *Per-Tonne Analysis* §3–§4. The result is a
+destination-by-destination table (shipment count, total/median tonnes, band
+distribution) and a **Method A vs B** revenue comparison on your actual load
+distribution — the evidence that drives the v1→v2 decision.
+`engine.js` exposes `analyseShipments(shipments, lanes, settings)`.
+
+### Day Rate vs LineHaul
+
+Labour is priced on the **Day Rate** for round trips at or under the LineHaul
+cutoff (default 250 km RT) and on the higher **LineHaul** rate beyond it, matching
+the workbook's two-rate build. Both bases and the cutoff are editable in Settings;
+`engine.js` exposes `loadedDayRate()`, `loadedLineHaulRate()` and `rateForKm()`.
 
 ## Getting the executable
 
