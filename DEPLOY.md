@@ -42,10 +42,40 @@ npx wrangler pages deploy public --project-name jdt-tender-hub
 In the Pages project → **Custom domains** → add e.g. `tenders.jdrt.com.au`
 (Cloudflare handles the TLS certificate).
 
+## AI-assisted analysis (optional)
+
+The tender workspace's **Per-Tonne** tab has a *Generate analysis & response*
+button. It posts the engine-computed figures to a **Cloudflare Pages Function**
+(`functions/api/analyse.js`, served at `/api/analyse`) which calls Claude
+server-side and returns a procurement-ready rationale.
+
+The Anthropic API key lives **only on the server** — it is never shipped to the
+browser. To enable the feature:
+
+1. Pages project → **Settings → Variables and Secrets** → add a **secret**:
+   - **Name:** `ANTHROPIC_API_KEY`  **Value:** your key (`sk-ant-…`)
+   - *(optional)* `ANTHROPIC_MODEL` to override the default `claude-opus-4-8`.
+2. Redeploy (or it applies on the next deploy).
+
+The whole app keeps working without the key — only the AI button is disabled
+(it returns a clear "not configured" message). The function makes its outbound
+call from Cloudflare's edge to `api.anthropic.com`, so a locked-down **user**
+network doesn't block it; only Cloudflare → Anthropic egress matters, which is
+always permitted.
+
+**Local development:**
+
+```bash
+cp .dev.vars.example .dev.vars   # then put your key in .dev.vars (gitignored)
+npm run build
+npx wrangler pages dev public    # serves the site + /api/* functions locally
+```
+
 ## Notes
 
 - Data is per-browser. To share a register, use **Reports → Backup data** to
   download a `.json` and **Reports → Restore data** on the other machine. (If
   you later want a shared multi-user store, that needs a small Cloudflare
   Workers + KV/D1 backend — ask and we'll add it.)
-- No environment variables or secrets are required.
+- The only secret is the optional `ANTHROPIC_API_KEY` above; the static site
+  itself needs no environment variables.

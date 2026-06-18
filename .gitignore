@@ -26,6 +26,9 @@ Thumbs.db
 /public/
 node_modules/
 
+# Cloudflare Pages local secrets (never commit the real key)
+.dev.vars
+
 # Generated deploy bundle
 /jdt-tender-hub.zip
 *.zip

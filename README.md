@@ -127,6 +127,17 @@ cutoff (default 250 km RT) and on the higher **LineHaul** rate beyond it, matchi
 the workbook's two-rate build. Both bases and the cutoff are editable in Settings;
 `engine.js` exposes `loadedDayRate()`, `loadedLineHaulRate()` and `rateForKm()`.
 
+### AI-assisted tender response
+
+The **Per-Tonne** tab can turn the verified figures into a procurement-ready
+rationale. The browser posts only engine-computed numbers (rate cards, per-load
+billing, the Method A vs B simulation) to a **Cloudflare Pages Function**
+(`functions/api/analyse.js`) that holds the Anthropic API key as an encrypted
+secret and asks Claude (default `claude-opus-4-8`) to write the justification —
+grounded only in those numbers, never inventing figures. The key never reaches
+the browser. Setup and local-dev steps are in **[DEPLOY.md](DEPLOY.md)**; the app
+works fully without it (the AI button just reports it isn't configured).
+
 ## Getting the executable
 
 ### Option A — download from CI (no setup)

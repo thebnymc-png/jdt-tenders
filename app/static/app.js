@@ -602,7 +602,94 @@
         { k: "Annualised uplift", v: fmtMoney((wkB - wkA) * 52), s: "over 52 weeks", cls: "good" }
       ]) + "</div>";
     }
-    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + ship + "</div>";
+    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + ship + aiCardHtml(priced.length) + "</div>";
+  }
+
+  // AI-assisted rationale — posts the engine-computed figures to the Pages
+  // Function proxy (which holds the API key) and renders the model's response.
+  function aiCardHtml(hasData) {
+    var bar = '<div class="tw-toolbar"><button class="btn btn-primary" data-aisummary' + (hasData ? "" : " disabled") + '>' +
+      '<svg viewBox="0 0 24 24" class="ico"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5l-1.4 1.4M7.9 16.1l-1.4 1.4m12 0l-1.4-1.4M7.9 7.9L6.5 6.5"/></svg> Generate analysis &amp; response</button>' +
+      '<span class="tw-count">' + (hasData ? "Drafts a procurement-ready rationale from the figures above — numbers only, no opinion." : "Add priced lanes to enable AI analysis.") + "</span></div>";
+    return card("AI-assisted tender response",
+      "Reasoning runs server-side on the verified figures; the API key stays on the server, never in the browser.",
+      bar + '<div id="aiOut" class="ai-out"></div>');
+  }
+
+  function laneLabelPlain(l) {
+    return (l.collSuburb || l.collPostcode || "—") + " → " + (l.delSuburb || l.delPostcode || "—");
+  }
+
+  // Gather only engine-computed figures to send for analysis (no raw inputs).
+  function buildAnalysisPayload(t, s) {
+    var method = t.ptMethod === "B" ? "B" : "A";
+    var priced = (t.lanes || []).map(function (l) {
+      return { l: l, bands: E.computeLaneBands(l, s, method), t: laneTonnes(l), freq: E.num(l.freq) };
+    }).filter(function (x) { return x.bands.ftlRigid > 0; });
+    var rnd = function (n) { return Math.round(E.num(n) * 100) / 100; };
+    var rateCards = priced.map(function (x) {
+      var b = x.bands;
+      return { lane: laneLabelPlain(x.l), minCharge: b.minCharge, t0_5: b.t0_5, t5_10: b.t5_10, t10_14: b.t10_14, t14: b.t14, ftlSingle: b.ftlSingle, ftlRigid: b.ftlRigid };
+    });
+    var perLoad = priced.filter(function (x) { return x.t > 0; }).map(function (x) {
+      var q = E.quoteTonnage(x.t, x.bands);
+      return { lane: laneLabelPlain(x.l), tonnes: rnd(x.t), band: q.band, bandRate: q.bandRate, tierCalc: rnd(q.tierCalc), quoted: rnd(q.quoted), minChargeApplied: q.minChargeApplied, freqPerWk: x.freq };
+    });
+    var sim = null;
+    if ((t.shipments || []).length) {
+      var a = E.analyseShipments(t.shipments, t.lanes, s);
+      sim = {
+        totals: { shipments: a.totals.n, revenueMethodA: Math.round(a.totals.revA), revenueMethodB: Math.round(a.totals.revB), upliftPct: rnd(a.totals.uplift * 100), unmatched: a.unmatched.n },
+        byDestination: a.rows.map(function (r) {
+          return { dest: r.dest, shipments: r.n, totalTonnes: Math.round(r.totalTonnes), medianTonnes: rnd(r.median), bandSpread: r.bands, revenueMethodA: Math.round(r.revA), revenueMethodB: Math.round(r.revB), upliftPct: rnd(r.uplift * 100) };
+        })
+      };
+    }
+    return {
+      context: {
+        customer: t.customer || "", reference: t.reference || "", anchoringMethod: method,
+        targetMarginPct: E.num(s.targetMarginPct), fuelLevyPct: E.num(s.fuelLevyPct), linehaulCutoffKm: E.num(s.linehaulThresholdKm) || 250
+      },
+      rateCards: rateCards, perLoad: perLoad, shipmentSimulation: sim
+    };
+  }
+
+  // Minimal, safe markdown → HTML (escape first, then a few inline patterns).
+  function mdLite(src) {
+    var lines = String(src).split(/\r?\n/), html = "", inList = false;
+    function inline(s) {
+      return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+    }
+    lines.forEach(function (raw) {
+      var line = raw.replace(/\s+$/, "");
+      var h = /^(#{1,4})\s+(.*)$/.exec(line);
+      var li = /^\s*[-*]\s+(.*)$/.exec(line);
+      if (h) { if (inList) { html += "</ul>"; inList = false; } html += "<h4>" + inline(h[2]) + "</h4>"; }
+      else if (li) { if (!inList) { html += "<ul>"; inList = true; } html += "<li>" + inline(li[1]) + "</li>"; }
+      else if (line.trim() === "") { if (inList) { html += "</ul>"; inList = false; } }
+      else { if (inList) { html += "</ul>"; inList = false; } html += "<p>" + inline(line) + "</p>"; }
+    });
+    if (inList) html += "</ul>";
+    return html;
+  }
+
+  function generateAiSummary(t) {
+    var out = el("aiOut"); if (!out) return;
+    out.innerHTML = '<div class="ai-busy">Analysing — drafting from the figures above…</div>';
+    var payload = buildAnalysisPayload(t, state.settings);
+    fetch("/api/analyse", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.j || !res.j.text) {
+          out.innerHTML = '<div class="ai-err">' + esc((res.j && res.j.error) || "Analysis failed.") + "</div>";
+          return;
+        }
+        out.innerHTML = '<div class="ai-md">' + mdLite(res.j.text) + "</div>" +
+          '<div class="ai-foot">Generated from engine-verified figures' + (res.j.model ? " · " + esc(res.j.model) : "") + ". Review before sending.</div>";
+      })
+      .catch(function () {
+        out.innerHTML = '<div class="ai-err">Could not reach the analysis service. If this is a locked-down network, the proxy host (api.anthropic.com) may be blocked, or the API key isn’t configured yet.</div>';
+      });
   }
 
   // Shipment revenue simulation (Per-Tonne Analysis §3-§4) — groups raw
@@ -713,6 +800,8 @@
       if (e.target.closest("[data-import]")) { openImport(); return; }
       var mb = e.target.closest("[data-ptmethod]");
       if (mb) { t.ptMethod = mb.dataset.ptmethod === "B" ? "B" : "A"; touchTender(t); renderSection(); markDirty(); return; }
+      var ai = e.target.closest("[data-aisummary]");
+      if (ai) { if (!ai.disabled) generateAiSummary(t); return; }
       if (e.target.closest("[data-importships]")) { openImport("shipments"); return; }
       if (e.target.closest("[data-clearships]")) {
         if (!t.shipments.length || confirm("Clear " + t.shipments.length + " imported shipments?")) {
