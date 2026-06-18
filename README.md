@@ -24,7 +24,10 @@ high-volume, professional use:
 - **Tender workspace** — each tender opens a full-page RFQ with sections:
   Overview, **Operational Lanes** (collection/delivery postcodes, pallets,
   weights, dimensions, stackability, loading type — each priced by the cost
-  engine), **Volume History** (12-month seasonality), Schedule, Commercial,
+  engine), **Per-Tonne** (banded $/t rate card per lane, a per-load check
+  showing whether each load bills at the band rate or the Min Charge floor,
+  and a live Method A vs B revenue comparison), **Volume History**
+  (12-month seasonality), Schedule, Commercial,
   Technology, Contract, and Bids, plus a **live network map** (OpenStreetMap;
   needs internet, degrades gracefully offline).
 - **Excel import** — upload any supplier tender workbook and map its columns

@@ -125,6 +125,7 @@
     }
     delete t.origin; delete t.destination; delete t.volume;
     t.lanes.forEach(function (l) { if (!l.id) l.id = Seed.newOpLane().id; });
+    if (t.ptMethod !== "B") t.ptMethod = "A";  // per-tonne anchoring method
   }
 
   // ---- navigation ----------------------------------------------------------
@@ -192,11 +193,12 @@
       { k: "Overdue", v: p.overdue, s: "past due", cls: p.overdue ? "bad" : "" }
     ];
   }
-  function renderStrip(target, kpis) {
-    el(target).innerHTML = kpis.map(function (c) {
+  function kpiStripHtml(kpis) {
+    return kpis.map(function (c) {
       return '<div class="kpi ' + (c.cls || "") + '"><div class="k">' + c.k + '</div><div class="v">' + c.v + '</div><div class="s">' + c.s + "</div></div>";
     }).join("");
   }
+  function renderStrip(target, kpis) { el(target).innerHTML = kpiStripHtml(kpis); }
 
   // ---- ACTIVE TENDERS grid -------------------------------------------------
   var COLS = [
@@ -527,11 +529,85 @@
       head + '<div class="bidlist">' + (bids || '<div style="color:var(--text-3);font-size:12.5px">No bids recorded yet.</div>') +
       '</div><button class="btn btn-sm" data-addbid style="margin-top:12px">+ Add bid</button>') + "</div>";
   }
+  // ---- per-tonne (banded $/t) section --------------------------------------
+  function laneLabel(l) {
+    var a = l.collSuburb || l.collPostcode || "—", b = l.delSuburb || l.delPostcode || "—";
+    return esc(a) + " → " + esc(b);
+  }
+  function laneTonnes(l) { return E.num(l.tonnes) || E.num(l.weightKg) / 1000; }
+
+  // Derives a $/t rate card per lane and runs each lane's typical load through
+  // MAX(Min Charge, band $/t × tonnes). Method A (ceiling) / B (midpoint) toggle.
+  function perTonneHtml(t, s) {
+    var method = t.ptMethod === "B" ? "B" : "A";
+    function mbtn(m, label, sub) {
+      return '<button class="pt-mbtn' + (method === m ? " on" : "") + '" data-ptmethod="' + m + '"><b>' + label + "</b><span>" + sub + "</span></button>";
+    }
+    var toggle = '<div class="pt-toggle">' +
+      mbtn("A", "Method A — ceiling", "FTL ÷ band ceiling · current Simplot v3 card") +
+      mbtn("B", "Method B — midpoint", "FTL ÷ band midpoint · recovers cost at the typical load") + "</div>";
+
+    var priced = (t.lanes || []).map(function (l) {
+      var bandsA = E.computeLaneBands(l, s, "A"), bandsB = E.computeLaneBands(l, s, "B");
+      return { l: l, bandsA: bandsA, bandsB: bandsB, bands: method === "B" ? bandsB : bandsA, t: laneTonnes(l), freq: E.num(l.freq) };
+    }).filter(function (x) { return x.bands.ftlRigid > 0; });
+
+    if (!priced.length) {
+      return '<div class="tw-pane">' + toggle + card("Per-tonne rate card", "",
+        '<div class="empty" style="padding:24px">Add operational lanes with hours and distance so the engine can derive FTL prices — then the $/tonne bands appear here.</div>') + "</div>";
+    }
+
+    var cardRows = priced.map(function (x) {
+      var b = x.bands;
+      return "<tr><td class='txt'>" + laneLabel(x.l) + "</td><td class='calc'>" + fmtMoney(b.minCharge) +
+        "</td><td class='calc'>" + fmtMoney2(b.t0_5) + "</td><td class='calc'>" + fmtMoney2(b.t5_10) +
+        "</td><td class='calc'>" + fmtMoney2(b.t10_14) + "</td><td class='calc'>" + fmtMoney2(b.t14) +
+        "</td><td class='calc'>" + fmtMoney(b.ftlSingle) + "</td><td class='calc'>" + fmtMoney(b.ftlRigid) + "</td></tr>";
+    }).join("");
+    var rateCard = card("Rate card — $/tonne by band",
+      "Rates EXCLUDE fuel levy. Min Charge = ROUND(FTL Rigid × 0.85); 0–14t bands ride a Rigid, 14t+ a Semi.",
+      "<div class='grid-wrap'><table class='pgrid'><thead><tr><th class='l'>Lane</th><th>Min Charge</th><th>0–5t</th><th>5–10t</th><th>10–14t</th><th>14t+</th><th>FTL Single</th><th>FTL Rigid</th></tr></thead><tbody>" +
+      cardRows + "</tbody></table></div>");
+
+    var loads = priced.filter(function (x) { return x.t > 0; });
+    var sanity = "";
+    if (loads.length) {
+      var sRows = loads.map(function (x) {
+        var q = E.quoteTonnage(x.t, x.bands);
+        return "<tr><td class='txt'>" + laneLabel(x.l) + "</td><td class='calc'>" + fmtNum(x.t) +
+          "</td><td class='calc'>" + q.band + "</td><td class='calc'>" + fmtMoney2(q.bandRate) +
+          "</td><td class='calc'>" + fmtMoney2(q.tierCalc) + "</td><td class='calc'>" +
+          (q.minChargeApplied ? "<span class='pt-floor'>Min Charge</span>" : "<span class='pt-bite'>Band rate</span>") +
+          "</td><td class='calc'><b>" + fmtMoney2(q.quoted) + "</b></td><td class='calc'>" +
+          (x.freq ? fmtNum(x.freq) : "—") + "</td><td class='calc'>" + (x.freq ? fmtMoney(q.quoted * x.freq) : "—") + "</td></tr>";
+      }).join("");
+      sanity = card("Per-load check — what each lane actually bills",
+        "Billed = MAX(Min Charge, band $/t × tonnes). “Min Charge” means the band rate didn’t bite — the floor is doing the work.",
+        "<div class='grid-wrap'><table class='pgrid'><thead><tr><th class='l'>Lane</th><th>Tonnes</th><th>Band</th><th>$/t</th><th>Rate × t</th><th>Billed at</th><th>Quoted</th><th>Freq/wk</th><th>Weekly $</th></tr></thead><tbody>" +
+        sRows + "</tbody></table></div>");
+    }
+
+    var comp = "", withFreq = loads.filter(function (x) { return x.freq > 0; });
+    if (withFreq.length) {
+      var wkA = withFreq.reduce(function (a, x) { return a + E.quoteTonnage(x.t, x.bandsA).quoted * x.freq; }, 0);
+      var wkB = withFreq.reduce(function (a, x) { return a + E.quoteTonnage(x.t, x.bandsB).quoted * x.freq; }, 0);
+      var uplift = wkA > 0 ? (wkB - wkA) / wkA : 0;
+      comp = '<div class="stat-strip pt-strip">' + kpiStripHtml([
+        { k: "Weekly billed — Method A", v: fmtMoney(wkA), s: "ceiling-anchored" },
+        { k: "Weekly billed — Method B", v: fmtMoney(wkB), s: "midpoint-anchored", cls: "good" },
+        { k: "Uplift A → B", v: (uplift >= 0 ? "+" : "") + fmtPct(uplift), s: fmtMoney(wkB - wkA) + " / wk", cls: "good" },
+        { k: "Annualised uplift", v: fmtMoney((wkB - wkA) * 52), s: "over 52 weeks", cls: "good" }
+      ]) + "</div>";
+    }
+    return '<div class="tw-pane">' + toggle + comp + rateCard + sanity + "</div>";
+  }
+
   function renderSection() {
     var t = getTender(currentTenderId); if (!t) { gotoView("active-tenders"); return; }
     var sec = currentSection, body = el("twBody");
     if (sec === "overview") { body.innerHTML = overviewHtml(t); renderTenderMap(t); }
     else if (sec === "lanes") body.innerHTML = lanesHtml(t, state.settings);
+    else if (sec === "pertonne") body.innerHTML = perTonneHtml(t, state.settings);
     else if (sec === "volume") body.innerHTML = volumeHtml(t);
     else if (sec === "schedule") body.innerHTML = sectionForm("Scheduling", "Collection and delivery requirements.", "schedule", [
       ["Collection windows", "collectionWindows", t.schedule.collectionWindows, { ph: "e.g. Mon–Fri 06:00–14:00" }],
@@ -594,6 +670,8 @@
       var t = getTender(currentTenderId); if (!t) return;
       if (e.target.closest("[data-addlane]")) { t.lanes.push(Seed.newOpLane({})); syncTenderValue(t); touchTender(t); renderSection(); renderTenderKpis(t); markDirty(); return; }
       if (e.target.closest("[data-import]")) { openImport(); return; }
+      var mb = e.target.closest("[data-ptmethod]");
+      if (mb) { t.ptMethod = mb.dataset.ptmethod === "B" ? "B" : "A"; touchTender(t); renderSection(); markDirty(); return; }
       var ld = e.target.closest("[data-lanedel]");
       if (ld) { t.lanes = t.lanes.filter(function (y) { return y.id !== ld.dataset.lanedel; }); syncTenderValue(t); renderSection(); renderTenderKpis(t); markDirty(); return; }
       if (e.target.closest("[data-addbid]")) { t.bids.push(Seed.newBid({})); renderSection(); markDirty(); return; }
