@@ -21,3 +21,7 @@ JDT_Quote_*.pdf
 Thumbs.db
 .idea/
 .vscode/
+
+# Static web build output / web deps
+/public/
+node_modules/

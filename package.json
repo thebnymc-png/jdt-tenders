@@ -1,0 +1,9 @@
+{
+  "name": "jdt-tender-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JD Refrigerated — Tender Management Hub (static web app)",
+  "scripts": {
+    "build": "node scripts/build-web.js"
+  }
+}

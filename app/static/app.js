@@ -19,9 +19,10 @@
     window.addEventListener("keydown", hide, { once: true });
   })();
 
-  var E = window.JDTEngine, Seed = window.JDTSeed;
+  var E = window.JDTEngine, Seed = window.JDTSeed, XP = window.JDTExport;
   var state = null, seedLanes = [], saveTimer = null, laneFilter = "";
   var currentView = "active-tenders";
+  var STORE_KEY = "jdt_state_v1";
 
   // ---- formatting ----------------------------------------------------------
   var fmtMoney = function (v) { return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-AU", { maximumFractionDigits: 0 }); };
@@ -36,18 +37,46 @@
   // ---- persistence ---------------------------------------------------------
   function markDirty() {
     var s = el("saveState"); s.textContent = "Saving…"; s.classList.add("dirty");
-    clearTimeout(saveTimer); saveTimer = setTimeout(save, 500);
+    clearTimeout(saveTimer); saveTimer = setTimeout(save, 400);
   }
   function save() {
-    fetch("/api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state) })
-      .then(function (r) { var s = el("saveState"); if (r.ok) { s.textContent = "Saved"; s.classList.remove("dirty"); } else s.textContent = "Save failed"; })
-      .catch(function () { el("saveState").textContent = "Offline"; });
+    var s = el("saveState");
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      s.textContent = "Saved"; s.classList.remove("dirty");
+    } catch (e) {
+      s.textContent = "Storage full";
+      toast("Browser storage is full — download a backup and remove old tenders/snapshots.", true);
+    }
   }
   function load() {
     return fetch("/static/seed_lanes.json").then(function (r) { return r.json(); })
-      .then(function (lanes) { seedLanes = lanes; return fetch("/api/state").then(function (r) { return r.ok ? r.json() : null; }); })
-      .then(function (saved) { state = (saved && saved.settings) ? migrate(saved) : Seed.defaultState(seedLanes); })
+      .then(function (lanes) {
+        seedLanes = lanes;
+        var saved = null;
+        try { var raw = localStorage.getItem(STORE_KEY); if (raw) saved = JSON.parse(raw); } catch (e) { saved = null; }
+        state = (saved && saved.settings) ? migrate(saved) : Seed.defaultState(seedLanes);
+      })
       .catch(function () { state = Seed.defaultState(seedLanes); });
+  }
+  // JSON backup / restore (per-browser storage safety net + data transfer)
+  function backupJson() {
+    var blob = new Blob([JSON.stringify(state, null, 1)], { type: "application/json" });
+    XP.download(blob, "JDT_Backup_" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".json");
+    toast("Backup downloaded.");
+  }
+  function restoreJson(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        if (!data || !data.settings) throw new Error("not a JDT backup file");
+        state = migrate(data); save(); renderActive(currentView);
+        toast("Backup restored.");
+      } catch (e) { toast("Restore failed: " + e.message, true); }
+    };
+    reader.onerror = function () { toast("Could not read that file.", true); };
+    reader.readAsText(file);
   }
   function migrate(s) {
     var base = Seed.defaultState(seedLanes);
@@ -585,8 +614,8 @@
     if (leafletPromise) return leafletPromise;
     leafletPromise = new Promise(function (resolve, reject) {
       var css = document.createElement("link"); css.rel = "stylesheet";
-      css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(css);
-      var s = document.createElement("script"); s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      css.href = "/static/vendor/leaflet/leaflet.css"; document.head.appendChild(css);
+      var s = document.createElement("script"); s.src = "/static/vendor/leaflet/leaflet.js";
       s.onload = function () { resolve(window.L); }; s.onerror = reject;
       document.head.appendChild(s);
       setTimeout(function () { if (!window.L) reject(new Error("timeout")); }, 6000);
@@ -723,15 +752,17 @@
     el("importFile").addEventListener("change", function () {
       var file = this.files[0]; if (!file) return;
       el("importStatus").textContent = "Reading " + file.name + "…";
-      var fd = new FormData(); fd.append("file", file);
-      fetch("/api/import/excel", { method: "POST", body: fd }).then(function (r) { return r.json(); })
-        .then(function (res) {
-          if (!res.ok) { el("importStatus").textContent = res.error || "Could not read the file."; return; }
-          importData = res;
-          el("importSheet").innerHTML = res.sheets.map(function (s, i) { return '<option value="' + i + '">' + esc(s.name) + " (" + s.rowCount + " rows)</option>"; }).join("");
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          importData = XP.parseWorkbook(reader.result);
+          el("importSheet").innerHTML = importData.sheets.map(function (s, i) { return '<option value="' + i + '">' + esc(s.name) + " (" + s.rowCount + " rows)</option>"; }).join("");
           renderImportMapping();
           showImportStep("map");
-        }).catch(function (e) { el("importStatus").textContent = "Import failed: " + e; });
+        } catch (e) { el("importStatus").textContent = "Could not read the file: " + e.message; }
+      };
+      reader.onerror = function () { el("importStatus").textContent = "Could not read the file."; };
+      reader.readAsArrayBuffer(file);
     });
     el("importSheet").addEventListener("change", renderImportMapping);
     el("importDo").addEventListener("click", function () {
@@ -864,7 +895,9 @@
     { id: "quote-excel", tag: "Excel", title: "Quote Spreadsheet", desc: "The customer quote as an .xlsx." },
     { id: "tenders-excel", tag: "Excel", title: "Tender Register", desc: "All tenders plus pipeline totals." },
     { id: "tenders-pdf", tag: "PDF", title: "Tender Register", desc: "Printable register with pipeline summary." },
-    { id: "import-template", tag: "Template", title: "Tender Import Template", desc: "Blank Excel template for importing tender lanes." }
+    { id: "import-template", tag: "Template", title: "Tender Import Template", desc: "Blank Excel template for importing tender lanes." },
+    { id: "backup", tag: "Backup", title: "Backup data", desc: "Download a .json snapshot of everything in this browser." },
+    { id: "restore", tag: "Restore", title: "Restore data", desc: "Load a previously downloaded .json backup." }
   ];
   function renderReports() {
     el("reportGrid").innerHTML = REPORTS.map(function (r) {
@@ -876,7 +909,15 @@
   function bindReports() {
     el("reportGrid").addEventListener("click", function (e) {
       var c = e.target.closest("[data-report]"); if (!c) return;
-      if (c.dataset.report === "quote-pdf") generatePdf(); else doExport(c.dataset.report);
+      var id = c.dataset.report;
+      if (id === "quote-pdf") generatePdf();
+      else if (id === "backup") backupJson();
+      else if (id === "restore") el("restoreFile").click();
+      else doExport(id);
+    });
+    el("restoreFile").addEventListener("change", function () {
+      if (this.files[0]) restoreJson(this.files[0]);
+      this.value = "";
     });
   }
 
@@ -1127,12 +1168,8 @@
   function generatePdf() {
     var q = E.buildQuote(state);
     if (!q.transport.length && !q.warehousing.length) return toast("Nothing flagged for the quote — set Quote? = Y on Lanes or Warehousing.", true);
-    save();
-    var btn = el("btnPdf"); btn.disabled = true; btn.textContent = "Generating…";
-    fetch("/api/quote/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quote: state.quote, computed: q }) })
-      .then(function (r) { return r.json(); })
-      .then(function (res) { btn.disabled = false; btn.textContent = "Generate Quote PDF"; toast(res.ok ? "PDF saved: " + res.filename : (res.error || "PDF failed"), !res.ok); })
-      .catch(function (e) { btn.disabled = false; btn.textContent = "Generate Quote PDF"; toast("PDF failed: " + e, true); });
+    try { var fn = XP.quotePdf({ quote: state.quote, computed: q }); toast("Downloaded " + fn); }
+    catch (e) { toast("PDF failed: " + e.message, true); }
   }
 
   // ---- exports -------------------------------------------------------------
@@ -1161,11 +1198,8 @@
   function doExport(type) {
     if ((type === "tenders-excel" || type === "tenders-pdf") && !state.tenders.length) return toast("No tenders to export yet.", true);
     if (type === "quote-excel") { var q = E.buildQuote(state); if (!q.transport.length && !q.warehousing.length) return toast("Nothing flagged for the quote — set Quote? = Y first.", true); }
-    save(); toast("Generating export…");
-    fetch("/api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildExportPayload(type)) })
-      .then(function (r) { return r.json(); })
-      .then(function (res) { toast(res.ok ? "Saved: " + res.filename : (res.error || "Export failed"), !res.ok); })
-      .catch(function (e) { toast("Export failed: " + e, true); });
+    try { var fn = XP.runExport(type, buildExportPayload(type)); toast("Downloaded " + fn); }
+    catch (e) { toast("Export failed: " + e.message, true); }
   }
   function bindExport() {
     var dd = el("exportDropdown");

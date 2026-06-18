@@ -372,6 +372,7 @@
       <section class="view" id="view-reports">
         <div class="view-head"><div><h1>Reports</h1><p class="sub">Generate documents next to the application — they open automatically.</p></div></div>
         <div class="report-grid" id="reportGrid"></div>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
       </section>
 
       <!-- TENDER WORKSPACE (full RFQ) ------------------------------------- -->
@@ -462,8 +463,12 @@
   <div id="toast" class="toast"></div>
 </div>
 
+  <script src="/static/vendor/xlsx.min.js"></script>
+  <script src="/static/vendor/jspdf.umd.min.js"></script>
+  <script src="/static/vendor/jspdf.plugin.autotable.min.js"></script>
   <script src="/static/engine.js"></script>
   <script src="/static/seed.js"></script>
+  <script src="/static/exporters.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

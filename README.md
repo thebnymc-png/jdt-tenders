@@ -1,5 +1,7 @@
 # JDT Pricing Model — Standalone Desktop App
 
+
+> **Deploying as a web app?** This now also runs as a fully client-side static site on **Cloudflare Pages** (no server, data in the browser). See **[DEPLOY.md](DEPLOY.md)**.
 A portable, offline pricing tool for **JD Refrigerated Transport**, rebuilt from
 the original `JDT_Pricing_Model.xlsx` workbook into a single Windows executable.
 No Excel, no macros, no install — copy `JDT_Pricing_Model.exe` to a USB stick or
