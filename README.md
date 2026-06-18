@@ -129,16 +129,25 @@ the workbook's two-rate build. Both bases and the cutoff are editable in Setting
 
 ### AI Analysis (in-app agent)
 
-The **AI Analysis** sidebar view is a self-contained tender assistant. Drop in an
-Excel/CSV file, type what you need — *answer questions, find data, present
-options, or set up a tender* — and the assistant either replies in text or
-**populates the app for you**. It shares the same Pages Function proxy
-(`kind:"agent"`); the model is given the workbook's headers and sample rows and
-returns tool calls (`create_tender`, `add_lanes_from_sheet`,
-`add_shipments_from_sheet`, `set_method`) that the browser applies against the
-**full** file it holds locally — so it only chooses the sheet + column mapping,
-never transcribes thousands of rows. Every change is listed back with a link to
-the affected tender.
+The **AI Analysis** sidebar view is a self-contained, multi-turn tender
+assistant. Drop in an Excel/CSV file, then chat: *answer questions, extract data,
+present options, or set up a tender*. It shares the Pages Function proxy
+(`kind:"agent"`) and works in two ways:
+
+- **Query tools** (`read_sheet_rows`, `aggregate_sheet`) run **immediately** in
+  the browser over the *full* data and feed the result back to the model — so
+  questions like "which destinations carry the most tonnes?" or "what's the
+  average tonnage per destination?" are answered with exact figures, not guessed
+  from a sample. The model can loop these until it has what it needs.
+- **Action tools** (`create_tender`, `set_tender_fields`,
+  `add_lanes_from_sheet`, `add_shipments_from_sheet`, `add_bids`, `add_carriers`,
+  `set_method`) are **proposed for review** — you see a "Proposed changes" card
+  and click **Apply** or **Discard** before anything is written. Applied changes
+  are listed back with a link to the tender, and follow-ups in the same chat keep
+  building the same tender.
+
+The model only ever chooses the sheet + column mapping; the browser applies it to
+the full file locally, so large exports are never transcribed or re-uploaded.
 
 ### AI-assisted tender response
 

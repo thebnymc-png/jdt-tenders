@@ -423,6 +423,27 @@ html[data-theme="dark"] .tw-tabs button.on{color:var(--accent);border-bottom-col
 .aia-applied h4{margin:0 0 6px;font-size:12.5px;color:var(--text-2)}
 .aia-applied ul{margin:0 0 10px;padding-left:18px;font-size:13px}
 .aia-applied li{margin:3px 0}
+.aia-fileacts{display:flex;gap:8px}
+
+/* AI Analysis — chat */
+.chat-log{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px}
+.chat-row{display:flex}
+.chat-row.user{justify-content:flex-end}
+.chat-row .bubble{max-width:80%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5}
+.chat-row.user .bubble{background:var(--primary-weak);color:var(--text);border-bottom-right-radius:4px}
+.chat-row.ai .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-tool{align-self:flex-start;font-size:11.5px;color:var(--text-3);background:var(--surface-2);border-radius:999px;padding:3px 11px}
+.chat-preview{border:1px solid var(--border-strong);border-radius:var(--r-md);padding:12px 14px;background:var(--surface)}
+.chat-preview.pending{border-color:var(--primary)}
+.chat-preview.applied{border-color:var(--go)}
+.chat-preview.muted{opacity:.7}
+.prev-h{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.prev-list{margin:0 0 10px;padding-left:18px;font-size:13px}
+.prev-list li{margin:3px 0}
+.prev-actions{display:flex;gap:8px}
+.prev-done{font-size:12.5px;color:var(--text-2);margin-bottom:8px}
+.chat-preview.applied .prev-done{color:var(--go)}
+.aia-composer{display:flex;flex-direction:column}
 .card-sub{font-size:12px;color:var(--text-2);margin:-8px 0 14px}
 .card .card-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:18px;flex-wrap:wrap}
 .card .card-foot .cf{font-size:12px;color:var(--text-2)}

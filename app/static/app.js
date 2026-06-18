@@ -1479,64 +1479,35 @@
   }
 
   // =========================================================================
-  // AI ANALYSIS — in-app agent: file + instruction -> answers / populated tender
+  // AI ANALYSIS — in-app agent (multi-turn chat, preview→confirm, data queries)
   // =========================================================================
-  var aiAgent = { workbook: null, fileName: "", running: false, result: null, target: "new", promptDraft: "" };
+  var aiChat = {
+    workbook: null, fileName: "",
+    messages: [],       // Anthropic-format conversation
+    transcript: [],     // UI items: {role:"user"|"assistant"|"tool", text} | {role:"preview", actions, status, log, tenderId}
+    pending: null,      // unresolved mutation proposal: { actions:[{id,name,input}], item }
+    pendingResults: [], // tool_result blocks queued for the next user turn
+    running: false, target: "new", activeTenderId: null, promptDraft: "", loops: 0
+  };
+  var AI_QUERY_TOOLS = { read_sheet_rows: 1, aggregate_sheet: 1 };
+  var AI_MAX_LOOPS = 10;
 
-  function renderAgentResult(r) {
-    if (!r) return "";
-    if (r.error) return '<div class="ai-err">' + esc(r.error) + "</div>";
-    var html = r.answer ? '<div class="ai-md">' + mdLite(r.answer) + "</div>" : "";
-    if (r.log && r.log.length) {
-      html += '<div class="aia-applied"><h4>Applied to your data</h4><ul>' +
-        r.log.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" +
-        (r.tenderId ? '<button class="btn btn-primary btn-sm" data-aiaopen="' + r.tenderId + '">Open tender →</button>' : "") + "</div>";
-    }
-    if (!r.answer && !(r.log && r.log.length)) html = '<div class="empty" style="padding:8px">No answer returned.</div>';
-    if (r.model) html += '<div class="ai-foot">' + esc(r.model) + " · review before relying on it.</div>";
-    return html;
+  function aiReset(keepFile) {
+    aiChat.messages = []; aiChat.transcript = []; aiChat.pending = null;
+    aiChat.pendingResults = []; aiChat.activeTenderId = null; aiChat.loops = 0; aiChat.running = false;
+    if (!keepFile) { aiChat.workbook = null; aiChat.fileName = ""; aiChat.promptDraft = ""; }
   }
 
-  function renderAiAnalysis() {
-    var b = el("aiaBody"); if (!b) return;
-    var wb = aiAgent.workbook;
-    var fileBody = wb
-      ? '<div class="aia-file"><div><b>' + esc(aiAgent.fileName) + "</b><span>" + wb.sheets.length + " sheet" + (wb.sheets.length === 1 ? "" : "s") + " · " +
-          fmtNum(wb.sheets.reduce(function (a, s) { return a + s.rowCount; }, 0)) + ' rows</span></div><button class="btn btn-sm" data-aiaclear>Replace</button></div>' +
-        '<div class="aia-sheets">' + wb.sheets.map(function (s) { return '<span class="aia-chip">' + esc(s.name) + " · " + fmtNum(s.rowCount) + "</span>"; }).join("") + "</div>"
-      : '<div class="aia-drop" id="aiaDrop"><svg viewBox="0 0 24 24" class="ico aia-dropico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg>' +
-        '<div>Drop an Excel/CSV file here, or <button class="linkbtn" data-aiapick>browse</button></div></div>';
-    var fileCard = card("1 · Upload a file", "A tender pack, a rate request, or a shipment export.", fileBody);
-
-    var chips = [
-      "Set up a new tender from this file",
-      "Load the shipment history for per-tonne analysis",
-      "Which destinations carry the most tonnes?",
-      "What share of loads fall below the Min Charge floor?",
-      "Summarise this tender and flag commercial risks"
-    ];
-    var promptCard = card("2 · Ask the assistant", "Answer questions, find data, present options — or populate the tender.",
-      '<textarea id="aiaPrompt" class="aia-prompt" rows="3" placeholder="e.g. Build a tender from the Rate Response sheet and load the QLD Regional shipments for analysis.">' + esc(aiAgent.promptDraft || "") + "</textarea>" +
-      '<div class="aia-chips">' + chips.map(function (c) { return '<button class="aia-ex" data-aiaex="' + esc(c) + '">' + esc(c) + "</button>"; }).join("") + "</div>" +
-      '<div class="aia-run-row"><label class="aia-target">Apply to <select id="aiaTarget"><option value="new">a new tender</option>' +
-        (currentTenderId ? '<option value="current"' + (aiAgent.target === "current" ? " selected" : "") + ">the open tender</option>" : "") + "</select></label>" +
-      '<button class="btn btn-primary" id="aiaRun"' + (wb && !aiAgent.running ? "" : " disabled") + ">" + (aiAgent.running ? "Working…" : "Run analysis") + "</button></div>");
-
-    var resultBody = aiAgent.running
-      ? '<div class="ai-busy">Thinking — reading the file and working on your request…</div>'
-      : (aiAgent.result ? renderAgentResult(aiAgent.result) : '<div class="empty" style="padding:8px">Results appear here.</div>');
-    b.innerHTML = '<div class="tw-pane">' + fileCard + promptCard + card("3 · Result", "", '<div id="aiaOut" class="ai-out">' + resultBody + "</div>") + "</div>";
-  }
-
-  // Compact view of the workbook to send (headers + capped sample rows).
   function compactWorkbook(wb) {
-    var SAMPLE = 20;
-    return {
-      sheets: wb.sheets.map(function (s) {
-        var sample = s.rows.slice(0, SAMPLE).map(function (row) { var o = {}; s.headers.forEach(function (h, i) { o[h] = row[i]; }); return o; });
-        return { name: s.name, headers: s.headers, rowCount: s.rowCount, sampleRows: sample };
-      })
-    };
+    var SAMPLE = 15;
+    return { sheets: wb.sheets.map(function (s) {
+      var sample = s.rows.slice(0, SAMPLE).map(function (row) { var o = {}; s.headers.forEach(function (h, i) { o[h] = row[i]; }); return o; });
+      return { name: s.name, headers: s.headers, rowCount: s.rowCount, sampleRows: sample };
+    }) };
+  }
+  function workbookContextText(wb) {
+    return "Uploaded workbook (sheet headers, row counts, and a sample of rows):\n```json\n" +
+      JSON.stringify(compactWorkbook(wb), null, 2) + "\n```";
   }
   function aiaColIndex(headers, name) {
     if (name == null || name === "") return -1;
@@ -1546,16 +1517,79 @@
     return -1;
   }
   function aiaFindSheet(name) {
-    var wb = aiAgent.workbook; if (!wb) return null;
+    var wb = aiChat.workbook; if (!wb) return null;
     var n = String(name || "").trim().toLowerCase();
     return wb.sheets.find(function (s) { return s.name.toLowerCase() === n; }) ||
       wb.sheets.find(function (s) { return n && s.name.toLowerCase().indexOf(n) >= 0; }) || null;
   }
 
-  // Apply the model's tool calls to state against the FULL local workbook.
+  // ---- query tools (run locally over the FULL data, returned to the model) ----
+  function runReadRows(input) {
+    var sh = aiaFindSheet(input.sheet); if (!sh) return JSON.stringify({ error: "sheet not found: " + input.sheet });
+    var cols = (Array.isArray(input.columns) && input.columns.length)
+      ? input.columns.map(function (c) { return { name: c, idx: aiaColIndex(sh.headers, c) }; })
+      : sh.headers.map(function (h, i) { return { name: h, idx: i }; });
+    var offset = Math.max(0, E.num(input.offset) || 0);
+    var limit = Math.min(500, E.num(input.limit) || 200);
+    var rows = sh.rows.slice(offset, offset + limit).map(function (r) {
+      var o = {}; cols.forEach(function (c) { if (c.idx >= 0) o[c.name] = r[c.idx]; }); return o;
+    });
+    return JSON.stringify({ sheet: sh.name, total: sh.rowCount, offset: offset, returned: rows.length, hasMore: offset + limit < sh.rowCount, rows: rows });
+  }
+  function runAggregate(input) {
+    var sh = aiaFindSheet(input.sheet); if (!sh) return JSON.stringify({ error: "sheet not found: " + input.sheet });
+    var gi = aiaColIndex(sh.headers, input.groupBy), vi = aiaColIndex(sh.headers, input.value);
+    var unit = input.valueUnit || "raw";
+    function val(r) { var raw = vi >= 0 ? E.num(r[vi]) : 0; return unit === "kg" ? raw / 1000 : raw; }
+    var groups = {};
+    sh.rows.forEach(function (r) {
+      var key = gi >= 0 ? String(r[gi]).trim() : "(all)"; if (key === "") key = "(blank)";
+      var g = groups[key] || (groups[key] = { count: 0, sum: 0, vals: [] });
+      g.count++; if (vi >= 0) { var v = val(r); g.sum += v; g.vals.push(v); }
+    });
+    var arr = Object.keys(groups).map(function (k) {
+      var g = groups[k]; g.vals.sort(function (a, b) { return a - b; });
+      return {
+        group: k, count: g.count, sum: E.round2(g.sum), avg: g.count ? E.round2(g.sum / g.count) : 0,
+        median: g.vals.length ? E.round2(g.vals[Math.floor(g.vals.length / 2)]) : 0,
+        min: g.vals.length ? E.round2(g.vals[0]) : 0, max: g.vals.length ? E.round2(g.vals[g.vals.length - 1]) : 0
+      };
+    });
+    var sortBy = input.sortBy || "sum", order = input.order === "asc" ? 1 : -1;
+    arr.sort(function (a, b) { return (a[sortBy] - b[sortBy]) * order; });
+    var top = E.num(input.top) || 20; if (top > 0) arr = arr.slice(0, top);
+    return JSON.stringify({ sheet: sh.name, groupBy: input.groupBy || null, value: input.value || null, unit: unit, groupCount: Object.keys(groups).length, results: arr });
+  }
+  function runQuery(a) {
+    try {
+      if (a.name === "read_sheet_rows") return runReadRows(a.input || {});
+      if (a.name === "aggregate_sheet") return runAggregate(a.input || {});
+    } catch (e) { return JSON.stringify({ error: String((e && e.message) || e) }); }
+    return JSON.stringify({ error: "unknown query " + a.name });
+  }
+  function describeQuery(a) {
+    var i = a.input || {};
+    if (a.name === "read_sheet_rows") return "Read rows from “" + (i.sheet || "?") + "”";
+    if (a.name === "aggregate_sheet") return "Aggregated “" + (i.sheet || "?") + "”" + (i.groupBy ? " by " + i.groupBy : "") + (i.value ? " · " + i.value : "");
+    return a.name;
+  }
+
+  // ---- action (mutation) tools ----
+  function describeAction(a) {
+    var i = a.input || {};
+    if (a.name === "create_tender") return "Create tender" + (i.customer ? " for " + i.customer : "") + (i.reference ? " (" + i.reference + ")" : "");
+    if (a.name === "set_tender_fields") return "Set " + (i.section || "overview") + " fields (" + Object.keys(i.fields || {}).length + ")";
+    if (a.name === "add_lanes_from_sheet") { var sh = aiaFindSheet(i.sheet); return "Add lanes from “" + (i.sheet || "?") + "”" + (sh ? " (~" + fmtNum(sh.rowCount) + " rows)" : ""); }
+    if (a.name === "add_shipments_from_sheet") { var s2 = aiaFindSheet(i.sheet); return "Load shipments from “" + (i.sheet || "?") + "”" + (s2 ? " (~" + fmtNum(s2.rowCount) + " rows)" : ""); }
+    if (a.name === "add_bids") return "Add " + ((i.bids || []).length) + " bid(s)";
+    if (a.name === "add_carriers") return "Add " + ((i.carriers || []).length) + " carrier(s) to the network";
+    if (a.name === "set_method") return "Set per-tonne method to " + (i.method === "B" ? "B" : "A");
+    return a.name;
+  }
   function applyAgentActions(actions) {
     var log = [], ctx = null;
-    if (aiAgent.target === "current" && currentTenderId) ctx = getTender(currentTenderId);
+    if (aiChat.activeTenderId) ctx = getTender(aiChat.activeTenderId);
+    if (!ctx && aiChat.target === "current" && currentTenderId) ctx = getTender(currentTenderId);
     function ensureTender() {
       if (!ctx) { ctx = Seed.newTender({}); normalizeTender(ctx); state.tenders.unshift(ctx); log.push("Created a new tender."); }
       return ctx;
@@ -1563,107 +1597,209 @@
     (actions || []).forEach(function (a) {
       var inp = a.input || {};
       if (a.name === "create_tender") {
-        if (ctx && aiAgent.target === "current") {
-          ["reference", "customer", "title", "dueDate", "owner", "notes"].forEach(function (k) { if (inp[k] != null && inp[k] !== "") ctx[k] = inp[k]; });
-          log.push("Updated tender details.");
-        } else {
-          ctx = Seed.newTender({ reference: inp.reference, customer: inp.customer, title: inp.title, dueDate: inp.dueDate, owner: inp.owner, notes: inp.notes });
-          normalizeTender(ctx); state.tenders.unshift(ctx);
-          log.push("Created tender" + (inp.customer ? " for " + inp.customer : "") + (inp.reference ? " (" + inp.reference + ")" : "") + ".");
-        }
+        if (ctx) { ["reference", "customer", "title", "dueDate", "owner", "notes"].forEach(function (k) { if (inp[k] != null && inp[k] !== "") ctx[k] = inp[k]; }); log.push("Updated tender details."); }
+        else { ctx = Seed.newTender({ reference: inp.reference, customer: inp.customer, title: inp.title, dueDate: inp.dueDate, owner: inp.owner, notes: inp.notes }); normalizeTender(ctx); state.tenders.unshift(ctx); log.push("Created tender" + (inp.customer ? " for " + inp.customer : "") + (inp.reference ? " (" + inp.reference + ")" : "") + "."); }
+      } else if (a.name === "set_tender_fields") {
+        ensureTender(); var sec = inp.section || "overview", f = inp.fields || {};
+        if (sec === "overview") { Object.keys(f).forEach(function (k) { if (f[k] != null && f[k] !== "") ctx[k] = f[k]; }); }
+        else { ctx[sec] = ctx[sec] || {}; Object.keys(f).forEach(function (k) { if (f[k] != null) ctx[sec][k] = f[k]; }); }
+        log.push("Updated " + sec + " fields (" + Object.keys(f).length + ").");
       } else if (a.name === "add_lanes_from_sheet") {
-        var sh = aiaFindSheet(inp.sheet); if (!sh) { log.push('Couldn\'t find a sheet matching "' + inp.sheet + '" for lanes.'); return; }
-        ensureTender();
-        var map = inp.mapping || {}, idx = {};
-        Object.keys(map).forEach(function (k) { idx[k] = aiaColIndex(sh.headers, map[k]); });
-        var added = 0;
-        sh.rows.forEach(function (row) {
-          var seed = {};
-          Object.keys(idx).forEach(function (k) { if (idx[k] >= 0) seed[k] = row[idx[k]]; });
-          if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) { ctx.lanes.push(Seed.newOpLane(seed)); added++; }
+        var sh = aiaFindSheet(inp.sheet); if (!sh) { log.push('No sheet matching "' + inp.sheet + '" for lanes.'); return; }
+        ensureTender(); var map = inp.mapping || {}, idx = {}; Object.keys(map).forEach(function (k) { idx[k] = aiaColIndex(sh.headers, map[k]); });
+        var n = 0; sh.rows.forEach(function (row) {
+          var seed = {}; Object.keys(idx).forEach(function (k) { if (idx[k] >= 0) seed[k] = row[idx[k]]; });
+          if (Object.keys(seed).some(function (k) { return String(seed[k]).trim() !== ""; })) { ctx.lanes.push(Seed.newOpLane(seed)); n++; }
         });
-        log.push("Added " + added + " lane" + (added === 1 ? "" : "s") + ' from "' + sh.name + '".');
+        log.push("Added " + n + " lane" + (n === 1 ? "" : "s") + ' from "' + sh.name + '".');
       } else if (a.name === "add_shipments_from_sheet") {
-        var s2 = aiaFindSheet(inp.sheet); if (!s2) { log.push('Couldn\'t find a sheet matching "' + inp.sheet + '" for shipments.'); return; }
+        var s2 = aiaFindSheet(inp.sheet); if (!s2) { log.push('No sheet matching "' + inp.sheet + '" for shipments.'); return; }
         ensureTender();
-        var di = aiaColIndex(s2.headers, inp.destColumn), pi = aiaColIndex(s2.headers, inp.postcodeColumn),
-            ti = aiaColIndex(s2.headers, inp.tonnesColumn), wi = aiaColIndex(s2.headers, inp.weightColumn);
-        var added2 = 0;
-        s2.rows.forEach(function (row) {
+        var di = aiaColIndex(s2.headers, inp.destColumn), pi = aiaColIndex(s2.headers, inp.postcodeColumn), ti = aiaColIndex(s2.headers, inp.tonnesColumn), wi = aiaColIndex(s2.headers, inp.weightColumn);
+        var n2 = 0; s2.rows.forEach(function (row) {
           var dest = di >= 0 ? row[di] : "", pc = pi >= 0 ? row[pi] : "", tonnes = ti >= 0 ? row[ti] : "", weightKg = wi >= 0 ? row[wi] : "";
           if (String(dest).trim() === "" && String(pc).trim() === "") return;
           if (E.num(tonnes) <= 0 && E.num(weightKg) <= 0) return;
-          ctx.shipments.push({ dest: dest, postcode: pc, tonnes: tonnes, weightKg: weightKg }); added2++;
+          ctx.shipments.push({ dest: dest, postcode: pc, tonnes: tonnes, weightKg: weightKg }); n2++;
         });
-        log.push("Loaded " + added2 + " shipment" + (added2 === 1 ? "" : "s") + ' from "' + s2.name + '".');
+        log.push("Loaded " + n2 + " shipment" + (n2 === 1 ? "" : "s") + ' from "' + s2.name + '".');
+      } else if (a.name === "add_bids") {
+        ensureTender(); var nb = 0; (inp.bids || []).forEach(function (b) { if (b && (b.carrier || b.amount != null)) { ctx.bids.push(Seed.newBid({ carrier: b.carrier, amount: b.amount, status: b.status })); nb++; } });
+        log.push("Added " + nb + " bid" + (nb === 1 ? "" : "s") + ".");
+      } else if (a.name === "add_carriers") {
+        var nc = 0; (inp.carriers || []).forEach(function (c) { if (c && c.name) { state.carriers.push(Seed.newCarrier(c)); nc++; } });
+        log.push("Added " + nc + " carrier" + (nc === 1 ? "" : "s") + " to the network.");
       } else if (a.name === "set_method") {
-        ensureTender(); ctx.ptMethod = inp.method === "B" ? "B" : "A";
-        log.push("Set per-tonne method to " + ctx.ptMethod + ".");
+        ensureTender(); ctx.ptMethod = inp.method === "B" ? "B" : "A"; log.push("Set per-tonne method to " + ctx.ptMethod + ".");
       }
     });
-    if (ctx) { syncTenderValue(ctx); touchTender(ctx); markDirty(); }
+    if (ctx) { syncTenderValue(ctx); touchTender(ctx); aiChat.activeTenderId = ctx.id; }
+    markDirty();
     return { log: log, tenderId: ctx ? ctx.id : null };
   }
 
-  function runAgent() {
-    if (!aiAgent.workbook || aiAgent.running) return;
+  // ---- conversation loop ----
+  function postAgent() {
+    return fetch("/api/analyse", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "agent", messages: aiChat.messages }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+  }
+  function aiCall() {
+    aiChat.loops++;
+    if (aiChat.loops > AI_MAX_LOOPS) {
+      aiChat.running = false;
+      aiChat.transcript.push({ role: "assistant", text: "_Stopped after " + AI_MAX_LOOPS + " data steps — try a narrower question._" });
+      renderAiAnalysis(); return;
+    }
+    aiChat.running = true; renderAiAnalysis();
+    postAgent().then(function (res) {
+      if (!res.ok || !res.j || (!res.j.answer && !res.j.actions && !res.j.content)) {
+        aiChat.running = false; aiChat.transcript.push({ role: "assistant", text: "⚠ " + ((res.j && res.j.error) || "Request failed.") }); renderAiAnalysis(); return;
+      }
+      aiChat.messages.push({ role: "assistant", content: res.j.content });
+      if (res.j.answer) aiChat.transcript.push({ role: "assistant", text: res.j.answer });
+      var actions = res.j.actions || [];
+      var queries = actions.filter(function (a) { return AI_QUERY_TOOLS[a.name]; });
+      var mutations = actions.filter(function (a) { return !AI_QUERY_TOOLS[a.name]; });
+      if (queries.length && !mutations.length) {
+        aiChat.transcript.push({ role: "tool", text: queries.map(describeQuery).join(" · ") });
+        aiChat.messages.push({ role: "user", content: queries.map(function (q) { return { type: "tool_result", tool_use_id: q.id, content: runQuery(q) }; }) });
+        aiCall(); return;  // loop until the model answers without querying
+      }
+      aiChat.running = false;
+      if (mutations.length) {
+        if (queries.length) queries.forEach(function (q) { aiChat.pendingResults.push({ type: "tool_result", tool_use_id: q.id, content: runQuery(q) }); });
+        var item = { role: "preview", actions: mutations, status: "pending" };
+        aiChat.transcript.push(item); aiChat.pending = { actions: mutations, item: item };
+      }
+      renderAiAnalysis();
+    }).catch(function () {
+      aiChat.running = false;
+      aiChat.transcript.push({ role: "assistant", text: "⚠ Could not reach the assistant. On a locked-down network api.anthropic.com may be blocked, or the API key isn’t configured." });
+      renderAiAnalysis();
+    });
+  }
+  function flushPending(reason) {
+    if (!aiChat.pending) return;
+    aiChat.pending.actions.forEach(function (a) { aiChat.pendingResults.push({ type: "tool_result", tool_use_id: a.id, content: reason }); });
+    aiChat.pending.item.status = "skipped"; aiChat.pending = null;
+  }
+  function aiResolve(apply) {
+    if (!aiChat.pending) return;
+    var p = aiChat.pending; aiChat.pending = null;
+    if (apply) {
+      var r = applyAgentActions(p.actions);
+      p.item.status = "applied"; p.item.log = r.log; p.item.tenderId = r.tenderId;
+      p.actions.forEach(function (a) { aiChat.pendingResults.push({ type: "tool_result", tool_use_id: a.id, content: "Applied. " + (r.log.join(" ") || "") }); });
+      save();
+    } else {
+      p.item.status = "discarded";
+      p.actions.forEach(function (a) { aiChat.pendingResults.push({ type: "tool_result", tool_use_id: a.id, content: "User declined this action." }); });
+    }
+    renderAiAnalysis();
+  }
+  function aiSend() {
+    if (!aiChat.workbook || aiChat.running) return;
     var prompt = (el("aiaPrompt") && el("aiaPrompt").value || "").trim();
-    if (!prompt) { toast("Type what you'd like the assistant to do.", true); return; }
-    aiAgent.promptDraft = prompt;
-    aiAgent.target = el("aiaTarget") ? el("aiaTarget").value : "new";
-    aiAgent.running = true; aiAgent.result = null; renderAiAnalysis();
-    var payload = { kind: "agent", prompt: prompt, target: aiAgent.target, workbook: compactWorkbook(aiAgent.workbook) };
-    fetch("/api/analyse", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        aiAgent.running = false;
-        if (!res.ok || !res.j || (!res.j.answer && !res.j.actions)) {
-          aiAgent.result = { error: (res.j && res.j.error) || "Analysis failed." }; renderAiAnalysis(); return;
-        }
-        var applied = applyAgentActions(res.j.actions || []);
-        aiAgent.result = { answer: res.j.answer || "", model: res.j.model, log: applied.log, tenderId: applied.tenderId };
-        if (applied.tenderId) save();
-        renderAiAnalysis();
-      })
-      .catch(function () {
-        aiAgent.running = false;
-        aiAgent.result = { error: "Could not reach the assistant. On a locked-down network the proxy host (api.anthropic.com) may be blocked, or the API key isn’t configured yet." };
-        renderAiAnalysis();
-      });
+    if (!prompt) return;
+    aiChat.target = el("aiaTarget") ? el("aiaTarget").value : aiChat.target;
+    flushPending("User continued without applying the previous proposal.");
+    var first = aiChat.messages.length === 0;
+    var text = first ? (workbookContextText(aiChat.workbook) + "\n\nRequest: " + prompt) : prompt;
+    var content = aiChat.pendingResults.length ? aiChat.pendingResults.concat([{ type: "text", text: text }]) : text;
+    aiChat.pendingResults = [];
+    aiChat.messages.push({ role: "user", content: content });
+    aiChat.transcript.push({ role: "user", text: prompt });
+    aiChat.promptDraft = ""; aiChat.loops = 0;
+    aiCall();
   }
 
+  // ---- rendering ----
+  function renderPreview(it) {
+    var rows = it.actions.map(function (a) { return "<li>" + esc(describeAction(a)) + "</li>"; }).join("");
+    var head = '<div class="prev-h">Proposed changes</div><ul class="prev-list">' + rows + "</ul>";
+    if (it.status === "pending") {
+      return '<div class="chat-preview pending">' + head + '<div class="prev-actions"><button class="btn btn-primary btn-sm" data-aiapply>Apply</button><button class="btn btn-sm" data-aidiscard>Discard</button></div></div>';
+    }
+    if (it.status === "applied") {
+      return '<div class="chat-preview applied">' + head + '<div class="prev-done">✓ Applied' + (it.log && it.log.length ? " — " + esc(it.log.join(" ")) : "") + "</div>" +
+        (it.tenderId ? '<button class="btn btn-primary btn-sm" data-aiaopen="' + it.tenderId + '">Open tender →</button>' : "") + "</div>";
+    }
+    return '<div class="chat-preview muted">' + head + '<div class="prev-done">' + (it.status === "discarded" ? "Discarded" : "Skipped") + "</div></div>";
+  }
+  function renderTranscript() {
+    if (!aiChat.transcript.length && !aiChat.running) return '<div class="empty" style="padding:8px">Ask a question, extract data, or request a setup. Try an example below.</div>';
+    var html = aiChat.transcript.map(function (it) {
+      if (it.role === "user") return '<div class="chat-row user"><div class="bubble">' + esc(it.text) + "</div></div>";
+      if (it.role === "assistant") return '<div class="chat-row ai"><div class="bubble ai-md">' + mdLite(it.text) + "</div></div>";
+      if (it.role === "tool") return '<div class="chat-tool">⛁ ' + esc(it.text) + "</div>";
+      if (it.role === "preview") return renderPreview(it);
+      return "";
+    }).join("");
+    if (aiChat.running) html += '<div class="chat-row ai"><div class="bubble"><span class="ai-busy">Working…</span></div></div>';
+    return html;
+  }
+  function renderAiAnalysis() {
+    var b = el("aiaBody"); if (!b) return;
+    var wb = aiChat.workbook;
+    var fileBody = wb
+      ? '<div class="aia-file"><div><b>' + esc(aiChat.fileName) + "</b><span>" + wb.sheets.length + " sheet" + (wb.sheets.length === 1 ? "" : "s") + " · " +
+          fmtNum(wb.sheets.reduce(function (a, s) { return a + s.rowCount; }, 0)) + ' rows</span></div><div class="aia-fileacts">' +
+          '<button class="btn btn-sm" data-ainew>New chat</button><button class="btn btn-sm" data-aiaclear>Replace file</button></div></div>' +
+        '<div class="aia-sheets">' + wb.sheets.map(function (s) { return '<span class="aia-chip">' + esc(s.name) + " · " + fmtNum(s.rowCount) + "</span>"; }).join("") + "</div>"
+      : '<div class="aia-drop" id="aiaDrop"><svg viewBox="0 0 24 24" class="ico aia-dropico"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 17v3h14v-3"/></svg>' +
+        '<div>Drop an Excel/CSV file here, or <button class="linkbtn" data-aiapick>browse</button></div></div>';
+    var fileCard = card("Source file", "A tender pack, a rate request, or a shipment export.", fileBody);
+    var transcriptCard = card("Conversation", "", '<div class="chat-log" id="aiaLog">' + renderTranscript() + "</div>");
+    var chips = ["Set up a new tender from this file", "Which destinations carry the most tonnes?", "What's the average tonnage per destination?", "Load the shipment history for per-tonne analysis", "What share of loads fall below the Min Charge floor?"];
+    var chipsHtml = (wb && !aiChat.transcript.length) ? '<div class="aia-chips">' + chips.map(function (c) { return '<button class="aia-ex" data-aiaex="' + esc(c) + '">' + esc(c) + "</button>"; }).join("") + "</div>" : "";
+    var canType = wb && !aiChat.running;
+    var composer = '<div class="aia-composer">' +
+      '<textarea id="aiaPrompt" class="aia-prompt" rows="2" placeholder="' + (wb ? "Ask a question, or request a change… (Enter to send)" : "Upload a file to begin…") + '"' + (canType ? "" : " disabled") + ">" + esc(aiChat.promptDraft || "") + "</textarea>" +
+      chipsHtml +
+      '<div class="aia-run-row"><label class="aia-target">Apply changes to <select id="aiaTarget"' + (currentTenderId ? "" : " disabled") + '><option value="new">a new tender</option>' +
+        (currentTenderId ? '<option value="current"' + (aiChat.target === "current" ? " selected" : "") + ">the open tender</option>" : "") + "</select></label>" +
+      '<button class="btn btn-primary" id="aiaSend"' + (canType ? "" : " disabled") + ">" + (aiChat.running ? "Working…" : "Send") + "</button></div></div>";
+    b.innerHTML = '<div class="tw-pane">' + fileCard + transcriptCard + card("Ask", "Answer questions, extract data, or propose changes you confirm.", composer) + "</div>";
+    var log = el("aiaLog"); if (log) log.scrollTop = log.scrollHeight;
+  }
+
+  // ---- file + binding ----
   function aiaLoadFile(file) {
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function () {
-      try { aiAgent.workbook = XP.parseWorkbook(reader.result); aiAgent.fileName = file.name; aiAgent.result = null; renderAiAnalysis(); }
+      try { var wb = XP.parseWorkbook(reader.result); aiReset(false); aiChat.workbook = wb; aiChat.fileName = file.name; renderAiAnalysis(); }
       catch (e) { toast("Could not read that file: " + e.message, true); }
     };
     reader.onerror = function () { toast("Could not read that file.", true); };
     reader.readAsArrayBuffer(file);
   }
-  function capturePrompt() { if (el("aiaPrompt")) aiAgent.promptDraft = el("aiaPrompt").value; }
-
   function bindAiAnalysis() {
     var body = el("aiaBody"); if (!body) return;
-    el("aiaFile").addEventListener("change", function () { if (this.files[0]) { capturePrompt(); aiaLoadFile(this.files[0]); this.value = ""; } });
+    el("aiaFile").addEventListener("change", function () { if (this.files[0]) { aiaLoadFile(this.files[0]); this.value = ""; } });
     body.addEventListener("click", function (e) {
       if (e.target.closest("[data-aiapick]")) { el("aiaFile").click(); return; }
-      if (e.target.closest("[data-aiaclear]")) { capturePrompt(); aiAgent.workbook = null; aiAgent.fileName = ""; renderAiAnalysis(); return; }
+      if (e.target.closest("[data-aiaclear]")) { aiReset(false); renderAiAnalysis(); return; }
+      if (e.target.closest("[data-ainew]")) { aiReset(true); renderAiAnalysis(); return; }
       var ex = e.target.closest("[data-aiaex]");
-      if (ex) { var ta = el("aiaPrompt"); if (ta) { ta.value = ex.dataset.aiaex; aiAgent.promptDraft = ta.value; ta.focus(); } return; }
-      if (e.target.closest("#aiaRun")) { runAgent(); return; }
+      if (ex) { var ta = el("aiaPrompt"); if (ta) { ta.value = ex.dataset.aiaex; aiChat.promptDraft = ta.value; ta.focus(); } return; }
+      if (e.target.closest("#aiaSend")) { aiSend(); return; }
+      if (e.target.closest("[data-aiapply]")) { aiResolve(true); return; }
+      if (e.target.closest("[data-aidiscard]")) { aiResolve(false); return; }
       var op = e.target.closest("[data-aiaopen]");
       if (op) { openTender(op.dataset.aiaopen); return; }
     });
-    body.addEventListener("input", function (e) { if (e.target.id === "aiaPrompt") aiAgent.promptDraft = e.target.value; });
-    body.addEventListener("change", function (e) { if (e.target.id === "aiaTarget") aiAgent.target = e.target.value; });
+    body.addEventListener("input", function (e) { if (e.target.id === "aiaPrompt") aiChat.promptDraft = e.target.value; });
+    body.addEventListener("change", function (e) { if (e.target.id === "aiaTarget") aiChat.target = e.target.value; });
+    body.addEventListener("keydown", function (e) {
+      if (e.target.id === "aiaPrompt" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); aiSend(); }
+    });
     body.addEventListener("dragover", function (e) { if (el("aiaDrop")) { e.preventDefault(); el("aiaDrop").classList.add("over"); } });
-    body.addEventListener("dragleave", function (e) { if (el("aiaDrop")) el("aiaDrop").classList.remove("over"); });
+    body.addEventListener("dragleave", function () { if (el("aiaDrop")) el("aiaDrop").classList.remove("over"); });
     body.addEventListener("drop", function (e) {
       if (!el("aiaDrop")) return;
       e.preventDefault(); el("aiaDrop").classList.remove("over");
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) { capturePrompt(); aiaLoadFile(e.dataTransfer.files[0]); }
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) aiaLoadFile(e.dataTransfer.files[0]);
     });
   }
 

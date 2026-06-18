@@ -40,57 +40,113 @@ const FIGURES_SYSTEM = [
 const AGENT_SYSTEM = [
   "You are the AI assistant inside the JD Refrigerated Transport tender hub. You",
   "help the user manage tenders end-to-end: answering questions about an uploaded",
-  "workbook, finding data, presenting options, and — when asked — populating the",
-  "app's records via the tools provided.",
+  "workbook, extracting and aggregating data, presenting options, and — when asked",
+  "— populating the app's records via the tools provided. This is a multi-turn",
+  "conversation; the user may keep asking follow-ups and adjustments.",
   "",
-  "You are given a compact view of the user's uploaded workbook: each sheet's",
-  "name, column headers, row count, and a sample of rows. Use the EXACT header",
-  "strings shown when you map columns — never invent header names.",
+  "You are given a compact view of the workbook: each sheet's name, column",
+  "headers, row count, and a SAMPLE of rows. The sample is not the full data. Use",
+  "the EXACT header strings shown — never invent header or sheet names.",
   "",
-  "How to respond:",
-  "- ALWAYS include a brief plain-text explanation of what you found or did, in",
-  "  markdown. Lead with the answer.",
-  "- When the user asks you to set up or populate something (a tender, lanes,",
-  "  shipments), call the appropriate tools. The app executes them against the",
-  "  full workbook it holds locally, so you only choose the sheet + column mapping;",
-  "  you do not need to transcribe rows.",
-  "- For pure questions (find data, compare, present options), answer in text and",
-  "  do not call tools.",
+  "Two kinds of tools:",
+  "",
+  "1) QUERY tools — read_sheet_rows and aggregate_sheet — are run immediately by",
+  "   the app over the FULL data and their results are returned to you. Use them to",
+  "   answer data questions accurately instead of guessing from the sample. Prefer",
+  "   aggregate_sheet for grouped questions (totals, averages, medians, top-N by a",
+  "   column, e.g. highest-volume lanes or average tonnage per lane) — it computes",
+  "   exact figures over every row. Use read_sheet_rows to inspect specific rows.",
+  "",
+  "2) ACTION tools — create_tender, set_tender_fields, add_lanes_from_sheet,",
+  "   add_shipments_from_sheet, add_bids, add_carriers, set_method — are PROPOSED",
+  "   to the user, who reviews and confirms them before anything changes. The app",
+  "   then applies confirmed actions against the full workbook it holds locally, so",
+  "   you only choose the sheet + column mapping; never transcribe rows.",
+  "",
+  "Rules:",
+  "- ALWAYS include a brief markdown explanation of what you found or propose.",
+  "  Lead with the answer/result.",
+  "- Read/aggregate FIRST (in their own turns), then propose actions in a later",
+  "  turn. Do NOT mix query tools and action tools in the same response.",
+  "- For pure data questions, answer in text after querying — don't propose actions.",
   "- Never invent figures or columns. If the data can't support a request, say so.",
   "",
   "Mapping guidance:",
-  "- Lanes need origin/destination and the cost drivers (pallets/weight/tonnes,",
-  "  vehicle, frequency, hours, km). Map only the columns that exist.",
-  "- Shipments need a destination column and a tonnage source — either a tonnes",
-  "  column or a weight column (state which; weight is assumed kilograms)."
+  "- Lanes need origin/destination and cost drivers (pallets/weight/tonnes,",
+  "  vehicle, frequency, hours, km). Map only columns that exist.",
+  "- Shipments need a destination column and a tonnage source — a tonnes column or",
+  "  a weight column (weight is assumed kilograms)."
 ].join("\n");
 
 const AGENT_TOOLS = [
   {
-    name: "create_tender",
-    description: "Create a new tender record and optionally set its overview fields. Call once before adding lanes/shipments unless the user is targeting an existing tender.",
+    name: "read_sheet_rows",
+    description: "QUERY (runs immediately): return actual rows from a sheet over the full data. Optionally project specific columns and paginate with offset/limit.",
     input_schema: {
       type: "object",
       properties: {
-        reference: { type: "string", description: "RFQ / reference number" },
-        customer: { type: "string" },
-        title: { type: "string" },
-        dueDate: { type: "string", description: "ISO date YYYY-MM-DD" },
-        owner: { type: "string" },
-        notes: { type: "string", description: "Assumptions, scope, exclusions" }
+        sheet: { type: "string" },
+        columns: { type: "array", items: { type: "string" }, description: "Header names to include; omit for all" },
+        offset: { type: "integer", description: "Row offset (default 0)" },
+        limit: { type: "integer", description: "Max rows to return (default 200, hard cap 500)" }
+      },
+      required: ["sheet"]
+    }
+  },
+  {
+    name: "aggregate_sheet",
+    description: "QUERY (runs immediately): group every row of a sheet by one column and compute count/sum/avg/median/min/max of a numeric value column. Use for totals, averages, and top-N rankings.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sheet: { type: "string" },
+        groupBy: { type: "string", description: "Header to group by (omit to aggregate the whole sheet)" },
+        value: { type: "string", description: "Numeric header to aggregate" },
+        valueUnit: { type: "string", enum: ["raw", "kg", "t"], description: "If the value is weight in kg, use 'kg' to report tonnes" },
+        sortBy: { type: "string", enum: ["count", "sum", "avg", "median", "min", "max"], description: "Metric to sort groups by (default sum)" },
+        order: { type: "string", enum: ["desc", "asc"] },
+        top: { type: "integer", description: "Return only the top N groups (default 20)" }
+      },
+      required: ["sheet"]
+    }
+  },
+  {
+    name: "create_tender",
+    description: "ACTION (needs confirmation): create a new tender. Call once before adding lanes/shipments unless targeting an existing tender.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reference: { type: "string" }, customer: { type: "string" }, title: { type: "string" },
+        dueDate: { type: "string", description: "ISO date YYYY-MM-DD" }, owner: { type: "string" },
+        notes: { type: "string" }
       }
     }
   },
   {
-    name: "add_lanes_from_sheet",
-    description: "Populate operational lanes from a worksheet by mapping JDT lane fields to that sheet's column headers (exact header strings). The app reads every row of the sheet.",
+    name: "set_tender_fields",
+    description: "ACTION (needs confirmation): set fields on the tender, in any RFQ section.",
     input_schema: {
       type: "object",
       properties: {
-        sheet: { type: "string", description: "Worksheet name" },
+        section: { type: "string", enum: ["overview", "schedule", "commercial", "technology", "contract"] },
+        fields: {
+          type: "object",
+          description: "Key/value fields for the section. overview: reference, customer, title, dueDate, owner, probability, notes. schedule: collectionWindows, deliveryTimeframes, weekend, bookingRules. commercial: fuelSurcharge, paymentTerms, minInsurance, serviceCredits, claims. technology: tracking, ediApi, pod. contract: duration, startDate, accessorials, disputeRules."
+        }
+      },
+      required: ["section", "fields"]
+    }
+  },
+  {
+    name: "add_lanes_from_sheet",
+    description: "ACTION (needs confirmation): populate operational lanes from a worksheet by mapping JDT lane fields to that sheet's exact column headers. The app reads every row.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sheet: { type: "string" },
         mapping: {
           type: "object",
-          description: "JDT lane field -> header name in this sheet. Include only fields that exist.",
+          description: "JDT lane field -> header name. Include only fields that exist.",
           properties: {
             collPostcode: { type: "string" }, collSuburb: { type: "string" },
             delPostcode: { type: "string" }, delSuburb: { type: "string" },
@@ -104,22 +160,56 @@ const AGENT_TOOLS = [
   },
   {
     name: "add_shipments_from_sheet",
-    description: "Load raw shipment history for per-tonne analysis from a worksheet. Give the destination column and a tonnage source (tonnes or weight) by exact header name. The app reads every row.",
+    description: "ACTION (needs confirmation): load raw shipment history for per-tonne analysis. Give the destination column and a tonnage source (tonnes or weight) by exact header name. The app reads every row.",
     input_schema: {
       type: "object",
       properties: {
         sheet: { type: "string" },
-        destColumn: { type: "string", description: "Header for the delivery destination (suburb/town/name)" },
-        postcodeColumn: { type: "string", description: "Header for the delivery postcode/zone, if present" },
-        tonnesColumn: { type: "string", description: "Header for tonnes per shipment, if present" },
-        weightColumn: { type: "string", description: "Header for weight (kg) per shipment, if tonnes absent" }
+        destColumn: { type: "string" }, postcodeColumn: { type: "string" },
+        tonnesColumn: { type: "string" }, weightColumn: { type: "string" }
       },
       required: ["sheet", "destColumn"]
     }
   },
   {
+    name: "add_bids",
+    description: "ACTION (needs confirmation): record competing carrier bids on the tender.",
+    input_schema: {
+      type: "object",
+      properties: {
+        bids: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { carrier: { type: "string" }, amount: { type: "number" }, status: { type: "string", enum: ["Pending", "Awarded", "Rejected"] } },
+            required: ["carrier"]
+          }
+        }
+      },
+      required: ["bids"]
+    }
+  },
+  {
+    name: "add_carriers",
+    description: "ACTION (needs confirmation): add carriers to the carrier network register.",
+    input_schema: {
+      type: "object",
+      properties: {
+        carriers: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { name: { type: "string" }, base: { type: "string" }, fleet: { type: "string" }, lanes: { type: "string" }, rating: { type: "number" }, compliance: { type: "string" }, contact: { type: "string" } },
+            required: ["name"]
+          }
+        }
+      },
+      required: ["carriers"]
+    }
+  },
+  {
     name: "set_method",
-    description: "Set the per-tonne anchoring method on the tender: A (band ceiling, current card) or B (band midpoint, proposed).",
+    description: "ACTION (needs confirmation): set the per-tonne anchoring method: A (band ceiling) or B (band midpoint).",
     input_schema: {
       type: "object",
       properties: { method: { type: "string", enum: ["A", "B"] } },
@@ -186,31 +276,27 @@ export async function onRequestPost(context) {
 
   const model = env.ANTHROPIC_MODEL || DEFAULT_MODEL;
 
-  // ----- agent mode: workbook + instruction -> answer + actions -----
+  // ----- agent mode: conversation + workbook -> answer + proposed actions -----
   if (payload.kind === "agent") {
-    if (!payload.prompt || !String(payload.prompt).trim()) {
+    const messages = Array.isArray(payload.messages) ? payload.messages : null;
+    if (!messages || !messages.length) {
       return json({ error: "Tell the assistant what you'd like it to do." }, 400);
     }
-    const userMessage =
-      "Instruction:\n" + String(payload.prompt).trim() +
-      "\n\nTarget: " + (payload.target === "current" ? "the currently open tender" : "a new tender") +
-      "\n\nUploaded workbook (headers, row counts, sample rows):\n```json\n" +
-      JSON.stringify(payload.workbook || {}, null, 2) + "\n```";
-
     const res = await callAnthropic(env, {
-      model: model, max_tokens: 3000, system: AGENT_SYSTEM, tools: AGENT_TOOLS,
-      messages: [{ role: "user", content: userMessage }]
+      model: model, max_tokens: 3000, system: AGENT_SYSTEM, tools: AGENT_TOOLS, messages: messages
     });
     if (res.error) return json({ error: res.error }, res.status || 502);
 
     const content = res.data.content || [];
     const actions = content.filter(function (b) { return b.type === "tool_use"; })
-      .map(function (b) { return { name: b.name, input: b.input || {} }; });
+      .map(function (b) { return { id: b.id, name: b.name, input: b.input || {} }; });
     const answer = textOf(content);
     if (!answer && !actions.length) {
       return json({ error: "The model returned nothing usable (stop reason: " + (res.data.stop_reason || "unknown") + ")." }, 502);
     }
-    return json({ answer: answer, actions: actions, model: res.data.model || null });
+    // `content` is returned verbatim so the client can echo this assistant turn
+    // back on the next request (required to keep tool_use/tool_result valid).
+    return json({ answer: answer, actions: actions, content: content, model: res.data.model || null });
   }
 
   // ----- figures mode (default): computed numbers -> rationale -----
